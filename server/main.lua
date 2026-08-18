@@ -223,6 +223,40 @@ local function iterateTrains()
         end
     end
 
+    -- DPS headway: trains stop at stations now, so a follower on the same track
+    -- must hold short instead of rear-ending the train ahead. 40 nodes ~ 300m.
+    local HEADWAY_NODES = 40
+    for i=1, #trackingTrains do
+        local a = trackingTrains[i]
+        if a and a.currentNode and a.private and not a.private.dwellUntil then
+            local blocked = false
+            for j=1, #trackingTrains do
+                local b = trackingTrains[j]
+                if b and j ~= i and b.trackIndex == a.trackIndex and b.currentNode then
+                    local trk = tracks[a.trackIndex]
+                    local num = trk and trk.numNodes or 0
+                    if num > 0 then
+                        local gap = (b.currentNode - a.currentNode) % num
+                        if gap > 0 and gap < HEADWAY_NODES then
+                            blocked = true
+                            break
+                        end
+                    end
+                end
+            end
+            local state = a.getState and a:getState()
+            if blocked and not a.private.headwayHold then
+                a.private.headwayHold = true
+                if state then state:set("trainSpeed", 0.0, true) end
+                lib.print.debug(("Train %i holding for headway"):format(a.id))
+            elseif not blocked and a.private.headwayHold then
+                a.private.headwayHold = nil
+                if state then state:set("trainSpeed", a.speed, true) end
+                lib.print.debug(("Train %i resuming, headway clear"):format(a.id))
+            end
+        end
+    end
+
     if blipData and config.general.showTrainBlips then
         if sv_enableNetEventReassembly then
             lib.triggerClientEvent("Ehbw-Trains:updBlipCoords", clients, blipData)
@@ -790,3 +824,9 @@ RegisterCommand('traindebug', function(source)
     end
     print(('[traindebug] %d trains tracked'):format(n))
 end, true)
+
+
+RegisterNetEvent('dps-trains:seatmark', function(line)
+    if type(line) ~= 'string' or #line > 200 then return end
+    print(('[seatmark] %s: %s'):format(GetPlayerName(source), line))
+end)

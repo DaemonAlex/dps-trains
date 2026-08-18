@@ -600,9 +600,12 @@ function Train:Update(time)
             -- Calculate the stopping distance
             local stoppingDistance = math_abs((zero^2 - trainSpeed^2) / (2 * -DECELERATION_RATE))
 
-            if distanceToStation <= 8.0 then
+            -- 22m window: the server samples position coarsely and a fast train
+            -- can step OVER a narrow trigger between updates (observed blow-through)
+            if distanceToStation <= 22.0 then
                 if not self.private.servedStation then
                     self.private.servedStation = stationIndex
+                    self.private.approachSlow = nil
                     self.private.dwellUntil = now + (config.general.stationDwellTime or 180000)
                     local state = self:getState()
                     if state then
@@ -625,12 +628,22 @@ function Train:Update(time)
             end
 
             local state = self:getState()
-            --lib.print.debug(distanceToStation, stationIndex, stoppingDistance)
-            if state and not self.private.servedStation and distanceToStation <= stoppingDistance + DISTANCE_MAGIC_NUMBER then
-                if GetTrainState(self.handle) == 0 then
-                    lib.print.debug(("Train %i is close to a station, switching state to slow down"):format(self.id))
-                    state:set("trainState", 1, true)
+            -- Staged braking under OUR control: GetTrainState is unreliable
+            -- server-side for client-created trains, so relying on the game's
+            -- own station slow-down let trains hit the stop window at full
+            -- cruise and glide far past the platform. Crawl from 180m out.
+            if state and not self.private.servedStation then
+                if distanceToStation <= 180.0 and not self.private.approachSlow then
+                    self.private.approachSlow = true
+                    state:set("trainSpeed", 4.0, true)
+                    lib.print.debug(("Train %i braking for station %i"):format(self.id, stationIndex))
                 end
+            end
+            -- recovery: if we somehow got past the station without stopping,
+            -- do not crawl forever - restore speed once the next stop is far
+            if self.private.approachSlow and self.private.servedStation == nil and distanceToStation > 300.0 then
+                self.private.approachSlow = nil
+                if state then state:set("trainSpeed", self.speed, true) end
             end
         end
 

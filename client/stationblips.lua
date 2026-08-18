@@ -30,3 +30,79 @@ CreateThread(function()
         EndTextCommandSetBlipName(blip)
     end
 end)
+
+
+-- DPS seat-mapping tool: stand at a seat position inside a carriage, run
+-- /seatmark - prints your offset relative to the nearest train carriage to the
+-- server console so seat lists can be authored for passenger coaches.
+RegisterCommand('seatmark', function()
+    local ped = PlayerPedId()
+    local pos = GetEntityCoords(ped)
+    local best, bestDist = nil, 30.0
+    for _, veh in ipairs(GetGamePool('CVehicle')) do
+        if GetVehicleClass(veh) == 21 then  -- trains
+            local d = #(GetEntityCoords(veh) - pos)
+            if d < bestDist then best, bestDist = veh, d end
+        end
+    end
+    if not best then
+        print('[seatmark] no train carriage within 30m')
+        return
+    end
+    -- walk the chain to find the specific carriage we are closest to
+    local carriage, ci = best, 0
+    for i = 0, 12 do
+        local c = GetTrainCarriage(best, i)
+        if not c or c == 0 or not DoesEntityExist(c) then break end
+        local d = #(GetEntityCoords(c) - pos)
+        if d < #(GetEntityCoords(carriage) - pos) then carriage, ci = c, i end
+    end
+    local off = GetOffsetFromEntityGivenWorldCoords(carriage, pos.x, pos.y, pos.z)
+    local relHeading = (GetEntityHeading(ped) - GetEntityHeading(carriage)) % 360.0
+    local model = GetEntityArchetypeName(carriage) or 'unknown'
+    TriggerServerEvent('dps-trains:seatmark',
+        ('model=%s carriage=%d vec4(%.4f, %.4f, %.4f, %.4f)'):format(model, ci, off.x, off.y, off.z, relHeading))
+    print(('[seatmark] logged: %s carriage %d offset %.2f %.2f %.2f'):format(model, ci, off.x, off.y, off.z))
+end, false)
+
+
+-- DPS: /board - put the player in the first free seat of the nearest coach.
+-- Fallback for when native LAYOUT_BUS entry misbehaves; works while moving.
+RegisterCommand('board', function()
+    local ped = PlayerPedId()
+    local pos = GetEntityCoords(ped)
+    local best, bestDist = nil, 12.0
+    for _, veh in ipairs(GetGamePool('CVehicle')) do
+        if GetVehicleClass(veh) == 21 then
+            -- check each carriage of the chain, not just the engine
+            for i = -1, 12 do
+                local c = (i == -1) and veh or GetTrainCarriage(veh, i)
+                if c and c ~= 0 and DoesEntityExist(c) then
+                    local d = #(GetEntityCoords(c) - pos)
+                    if d < bestDist then best, bestDist = c, d end
+                end
+            end
+        end
+    end
+    if not best then
+        print('[board] no train carriage within 12m')
+        return
+    end
+    local seats = GetVehicleModelNumberOfSeats(GetEntityModel(best))
+    for seat = 0, seats - 2 do
+        if IsVehicleSeatFree(best, seat) then
+            TaskWarpPedIntoVehicle(ped, best, seat)
+            print(('[board] seated: seat %d of %d'):format(seat, seats - 1))
+            return
+        end
+    end
+    print('[board] no free seats in this carriage')
+end, false)
+
+-- and the exit: /disembark from wherever you are seated
+RegisterCommand('disembark', function()
+    local ped = PlayerPedId()
+    if IsPedInAnyVehicle(ped, false) then
+        TaskLeaveVehicle(ped, GetVehiclePedIsIn(ped, false), 0)
+    end
+end, false)

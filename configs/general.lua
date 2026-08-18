@@ -151,8 +151,8 @@ config.useHighPrecisionBlending = true
 --- Should each train show blips
 config.showTrainBlips = true  -- DPS: small per-service blips (metro blue / passenger green / freight orange)
 
---- How long a train holds at each station before departing (ms). DPS: 3 minutes.
-config.stationDwellTime = 180000
+--- How long a train holds at each station before departing (ms). DPS: 1 minute.
+config.stationDwellTime = 60000
 
 --- The sprite for the train blip
 config.trainBlipSprite = 795

@@ -49,11 +49,11 @@ config.shouldStopAtStations = true
 
 config.startLocations = {
     -- TRAINCONFIGS_FILE appends: custom consists live AFTER the 29 vanilla
-    -- entries (b3258). base 29 = passenger_config01, 30 = passenger_config02,
-    -- 31 = freight_config01. Rotation: two passenger, one freight.
-    {coords = vec3(-378.860, 3845.750, 74.095), direction = true, variation = 29, doors = true},  -- passenger (streak coaster)
-    {coords = vec3(2592.550, 2141.790, 31.265), direction = true, variation = 30, doors = true},  -- passenger
-    {coords = vec3(1260.960, -805.591, 45.301), direction = true, variation = 31, doors = false},  -- freight
+    -- entries (b3258): vanilla is 0-27 (metro last at 27), customs start at 28.
+    -- 28 = passenger_config01, 29 = passenger_config02, 30 = freight_config01. Rotation: two passenger, one freight.
+    {coords = vec3(-378.860, 3845.750, 74.095), direction = true, variation = 28, doors = true},  -- passenger (streak coaster)
+    {coords = vec3(2592.550, 2141.790, 31.265), direction = true, variation = 29, doors = true},  -- passenger
+    {coords = vec3(1260.960, -805.591, 45.301), direction = true, variation = 30, doors = false},  -- freight
 }
 
 --- The default cruise speed for all default freight trains

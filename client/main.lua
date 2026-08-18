@@ -292,7 +292,10 @@ RegisterNetEvent("Ehbw-Trains:createTrainEntity", function (coordinates, data)
         NetworkUseHighPrecisionVehicleBlending(NetworkGetNetworkIdFromEntity(train), true)
     end
 
-    if data.shouldStopAtStations and SetTrainStopAtStations then
+    -- native station stops disabled: the game only knows the vanilla power
+    -- station stop, which double-stopped trains there. All stops are handled
+    -- by the DPS dwell cycle server-side.
+    if false and data.shouldStopAtStations and SetTrainStopAtStations then
         lib.print.debug("Setting stops at station to true")
         SetTrainStopAtStations(train, true)
     end
@@ -670,10 +673,24 @@ if config.general.showTrainBlips then
     local function setupBlipData(blip, trainData)
         local type = trainData.type or trainData  -- tolerate old (blip, "type") calls
         local variation = trainData.variation
+        local id = trainData.id
+        -- every train gets its OWN color so the map reads at a glance:
+        -- Metro 1 blue, Metro 2 purple, Passenger 1 green, Passenger 2 yellow,
+        -- Freight orange (id order follows config spawn order)
+        local BY_ID = {
+            [1] = { 'Metro 1',           3 },
+            [2] = { 'Metro 2',           27 },
+            [3] = { 'Passenger Train 1', 2 },
+            [4] = { 'Passenger Train 2', 5 },
+            [5] = { 'Freight Train',     17 },
+        }
         local label, color
-        if type == 'metro' then
+        local hit = id and BY_ID[id]
+        if hit then
+            label, color = hit[1], hit[2]
+        elseif type == 'metro' then
             label, color = 'Metro', 3
-        elseif variation == 29 or variation == 30 then
+        elseif variation == 28 or variation == 29 then
             label, color = 'Passenger Train', 2
         elseif type == 'cablecar' then
             label, color = 'Cable Car', 5
