@@ -149,7 +149,7 @@ config.recreateTrainDistance = 400.0
 config.useHighPrecisionBlending = true
 
 --- Should each train show blips
-config.showTrainBlips = true  -- DPS: small per-service blips (metro blue / passenger green / freight orange)
+config.showTrainBlips = false  -- DPS: map decluttered; station blips (short-range) remain
 
 --- How long a train holds at each station before departing (ms). DPS: 1 minute.
 config.stationDwellTime = 60000
