@@ -188,7 +188,7 @@ config.deleteDistance = 500.0
 --- The default speed of metro and trains, between 0 - 30
 --- Trains cannot have a negative speed without having a negative effect for remote (other) players
 --- Trains also cannot have a speed above 30 without potentially desynchronizing between clients (as 30.f is the max cruiseSpeed value in CTrainGameStateDataNode)
-config.defaultSpeed = 20  -- m/s (~45mph). Cap is 30 unless unlimitSpeed; note server/main.lua reads THIS, not config.freight.speed
+config.defaultSpeed = 26  -- m/s (~58mph). Cap is 30 unless unlimitSpeed; note server/main.lua reads THIS, not config.freight.speed
 
 --- Candidate Selection options (only used when server-setters are disabled)
 --- Should the best candidate (those within config.recreateTrainDistance or 424.0 units of the trains respawn location)

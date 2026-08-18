@@ -251,7 +251,9 @@ local function iterateTrains()
                 lib.print.debug(("Train %i holding for headway"):format(a.id))
             elseif not blocked and a.private.headwayHold then
                 a.private.headwayHold = nil
-                if state then state:set("trainSpeed", a.speed, true) end
+                local resumeSpeed = DPS_ZoneSpeed and DPS_ZoneSpeed(a.trackIndex, a.currentNode, a.speed) or a.speed
+                if state then state:set("trainSpeed", resumeSpeed, true) end
+                a.private.appliedZoneSpeed = resumeSpeed
                 lib.print.debug(("Train %i resuming, headway clear"):format(a.id))
             end
         end

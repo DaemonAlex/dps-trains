@@ -1,4 +1,28 @@
 ---@class CTrainPrivate
+
+-- ============================================
+-- DPS SPEED ZONES (track 0 main line)
+-- Open country runs near the cap; the urban corridor slows down.
+-- Node ranges from data/tracks-0.lua geography.
+-- ============================================
+local SPEED_ZONES = {
+    [0] = {
+        { from = 2150, to = 3350, speed = 16.0, name = 'city corridor' },
+        -- everything else on track 0 runs the open-country speed below
+    },
+}
+local OPEN_SPEED = 28.0
+
+function DPS_ZoneSpeed(trackIndex, node, fallback)
+    local zones = SPEED_ZONES[trackIndex]
+    if not zones or not node then return fallback end
+    for i = 1, #zones do
+        local z = zones[i]
+        if node >= z.from and node <= z.to then return z.speed end
+    end
+    return OPEN_SPEED
+end
+
 ---@field isCreating boolean
 ---@field isDeleting boolean
 ---@field lastUpdate number
@@ -563,6 +587,18 @@ function Train:Update(time)
             end
         end
 
+        -- speed zones: while free-running (no dwell/brake), hold the zone speed
+        if not self.isPlayerDriven and not self.private.dwellUntil and not self.private.approachSlow and not self.private.headwayHold then
+            local zoneSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
+            if self.private.appliedZoneSpeed ~= zoneSpeed then
+                local zstate = self:getState()
+                if zstate then
+                    zstate:set("trainSpeed", zoneSpeed, true)
+                    self.private.appliedZoneSpeed = zoneSpeed
+                end
+            end
+        end
+
         if self.stopsAtStation and not self.isPlayerDriven and self.track:hasStationInformation() then
             local stationIndex, distanceToStation = self.track:getClosestStation(self.currentNode, self.direction, self.direction)
             local now = GetGameTimer()
@@ -574,8 +610,10 @@ function Train:Update(time)
                     local state = self:getState()
                     if state then
                         if self.doors then state:set("trainDoors", false, true) end
-                        state:set("trainSpeed", self.speed, true)
+                        local resumeSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
+                        state:set("trainSpeed", resumeSpeed, true)
                         state:set("trainState", 0, true)
+                        self.private.appliedZoneSpeed = resumeSpeed
                     end
                     lib.print.debug(("Train %i departing station"):format(self.id))
                     self.private.dwellUntil = nil
@@ -643,7 +681,9 @@ function Train:Update(time)
             -- do not crawl forever - restore speed once the next stop is far
             if self.private.approachSlow and self.private.servedStation == nil and distanceToStation > 300.0 then
                 self.private.approachSlow = nil
-                if state then state:set("trainSpeed", self.speed, true) end
+                local resumeSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
+                if state then state:set("trainSpeed", resumeSpeed, true) end
+                self.private.appliedZoneSpeed = resumeSpeed
             end
         end
 
