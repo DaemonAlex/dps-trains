@@ -1,0 +1,18 @@
+{
+    "leave_train_seat": "Press [F] to leave Seat",
+    "target_drive_train": "Drive Train",
+    "target_sit_in_train": "Sit in Seat",
+
+    "candidate": {
+        "reasons": {
+            "1": "Client missing information for train creation",
+            "2": "Client cannot create train outside of its scope",
+            "3": "Client created train failed to create / or was deleted",
+            "4": "Client created train, train ended up outside of the scope",
+            "5": "Client created train, native failed to create. Likely missing model or invalid variation",
+            "6": "Client created train, but one or more carriages failed to network.",
+            "7": "Client created train, but train engine failed to network",
+            "8": "Client is in a network tutorial!"
+        }
+    }
+}
