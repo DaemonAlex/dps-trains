@@ -125,7 +125,8 @@ end
 function Train:GetClientInfo()
     return {
         id = self.id,
-        type = self.type
+        type = self.type,
+        variation = self.variation
     }
 end
 
