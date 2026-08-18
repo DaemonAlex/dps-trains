@@ -292,7 +292,10 @@ RegisterNetEvent("Ehbw-Trains:createTrainEntity", function (coordinates, data)
         NetworkUseHighPrecisionVehicleBlending(NetworkGetNetworkIdFromEntity(train), true)
     end
 
-    if data.shouldStopAtStations and SetTrainStopAtStations then
+    -- native station stops disabled: the game only knows the vanilla power
+    -- station stop, which double-stopped trains there. All stops are handled
+    -- by the DPS dwell cycle server-side.
+    if false and data.shouldStopAtStations and SetTrainStopAtStations then
         lib.print.debug("Setting stops at station to true")
         SetTrainStopAtStations(train, true)
     end
@@ -668,26 +671,40 @@ if config.general.showTrainBlips then
     -- variations 29/30 (see dps-trains-glossary): metro=blue, passenger=green,
     -- freight=orange, all small.
     local function setupBlipData(blip, trainData)
-        local type = trainData.type or trainData  -- tolerate old (blip, "type") calls
+        local svc = trainData.type  -- both call sites pass the full table now
         local variation = trainData.variation
+        local id = trainData.id
+        -- every train gets its OWN color so the map reads at a glance:
+        -- Metro 1 blue, Metro 2 purple, Passenger 1 green, Passenger 2 yellow,
+        -- Freight orange (id order follows config spawn order)
+        local BY_ID = {
+            [1] = { 'Metro 1',           3 },
+            [2] = { 'Metro 2',           27 },
+            [3] = { 'Passenger Train 1', 2 },
+            [4] = { 'Passenger Train 2', 5 },
+            [5] = { 'Freight Train',     17 },
+        }
         local label, color
-        if type == 'metro' then
+        local hit = id and BY_ID[id]
+        if hit then
+            label, color = hit[1], hit[2]
+        elseif svc == 'metro' then
             label, color = 'Metro', 3
-        elseif variation == 29 or variation == 30 then
+        elseif variation == 28 or variation == 29 then
             label, color = 'Passenger Train', 2
-        elseif type == 'cablecar' then
+        elseif svc == 'cablecar' then
             label, color = 'Cable Car', 5
         else
             label, color = 'Freight Train', 17
         end
-        SetBlipSprite(blip, (config[type] and config[type].trainBlipSprite or config.general.trainBlipSprite))
+        SetBlipSprite(blip, (config[svc] and config[svc].trainBlipSprite or config.general.trainBlipSprite))
         SetBlipScale(blip, 0.5)
         SetBlipColour(blip, color)
         AddTextEntry(("EHBW-TRAINS-%s"):format(label), label)
         SetBlipNameFromTextFile(blip, ("EHBW-TRAINS-%s"):format(label))
         SetBlipAsShortRange(blip, false)  -- trains show map-wide: the map IS the tracker
-        if config[type] and (config[type].trainBlipDisplay or config.general.trainBlipDisplay) then
-            SetBlipDisplay(blip, config[type].trainBlipDisplay or config.general.trainBlipDisplay)
+        if config[svc] and (config[svc].trainBlipDisplay or config.general.trainBlipDisplay) then
+            SetBlipDisplay(blip, config[svc].trainBlipDisplay or config.general.trainBlipDisplay)
         end
     end
 
@@ -701,7 +718,7 @@ if config.general.showTrainBlips then
             local trainData = data[i]
 
             if not trainData then
-                lib.print.debug(("Malformed train blip data, index %i is missing data"):format(trainData))
+                lib.print.debug(("Malformed train blip data, index %i is missing data"):format(i))
                 goto skip
             end
 

@@ -223,6 +223,42 @@ local function iterateTrains()
         end
     end
 
+    -- DPS headway: trains stop at stations now, so a follower on the same track
+    -- must hold short instead of rear-ending the train ahead. 40 nodes ~ 300m.
+    local HEADWAY_NODES = 40
+    for i=1, #trackingTrains do
+        local a = trackingTrains[i]
+        if a and a.currentNode and a.private and not a.private.dwellUntil then
+            local blocked = false
+            for j=1, #trackingTrains do
+                local b = trackingTrains[j]
+                if b and j ~= i and b.trackIndex == a.trackIndex and b.currentNode then
+                    local trk = tracks[a.trackIndex]
+                    local num = trk and trk.numNodes or 0
+                    if num > 0 then
+                        local gap = (b.currentNode - a.currentNode) % num
+                        if gap > 0 and gap < HEADWAY_NODES then
+                            blocked = true
+                            break
+                        end
+                    end
+                end
+            end
+            local state = a.getState and a:getState()
+            if blocked and not a.private.headwayHold then
+                a.private.headwayHold = true
+                if state then state:set("trainSpeed", 0.0, true) end
+                lib.print.debug(("Train %i holding for headway"):format(a.id))
+            elseif not blocked and a.private.headwayHold then
+                a.private.headwayHold = nil
+                local resumeSpeed = DPS_ZoneSpeed and DPS_ZoneSpeed(a.trackIndex, a.currentNode, a.speed) or a.speed
+                if state then state:set("trainSpeed", resumeSpeed, true) end
+                a.private.appliedZoneSpeed = resumeSpeed
+                lib.print.debug(("Train %i resuming, headway clear"):format(a.id))
+            end
+        end
+    end
+
     if blipData and config.general.showTrainBlips then
         if sv_enableNetEventReassembly then
             lib.triggerClientEvent("Ehbw-Trains:updBlipCoords", clients, blipData)
@@ -790,3 +826,113 @@ RegisterCommand('traindebug', function(source)
     end
     print(('[traindebug] %d trains tracked'):format(n))
 end, true)
+
+
+RegisterNetEvent('dps-trains:seatmark', function(line)
+    if type(line) ~= 'string' or #line > 200 then return end
+    print(('[seatmark] %s: %s'):format(GetPlayerName(source), line))
+end)
+
+
+-- ============================================
+-- ARRIVAL BOARD (DPS) - feeds the phone transit app
+-- ============================================
+local STATION_NAMES = {
+    [0] = {  -- main line, keyed by stop node
+        [462] = 'Lumber Mill', [651] = 'Paleto Bay', [1481] = 'Quarry',
+        [1555] = 'Wind Farm', [1701] = 'Power Plant', [2434] = 'Downtown',
+        [2667] = 'Port Depot', [2865] = 'Downtown', [3891] = 'Quarry',
+        [4159] = 'Sandy Shores',
+    },
+    [3] = {
+        [179] = 'Strawberry', [271] = 'Little Seoul', [388] = 'Puerto Del Sol',
+        [434] = 'LSIA West', [530] = 'LSIA East', [578] = 'Rockford South',
+        [689] = 'Little Seoul East', [782] = 'Davis', [1078] = 'Burton',
+        [1162] = 'Portola Drive',
+    },
+}
+local TRAIN_LABELS = {
+    metro = { label = 'Metro', color = '#4aa3ff' },
+}
+local function trainLabel(train)
+    if train.type == 'metro' then return 'Metro ' .. train.id, '#4aa3ff' end
+    if train.variation == 28 then return 'Passenger 1', '#3ad06a' end
+    if train.variation == 29 then return 'Passenger 2', '#e8d24a' end
+    return 'Freight', '#f08a3c'
+end
+
+local cumCache = {}
+local function cumDist(trackIndex)
+    if cumCache[trackIndex] then return cumCache[trackIndex] end
+    local track = tracks[trackIndex]
+    if not track or not track.nodes then return nil end
+    local cum, total = { [1] = 0.0 }, 0.0
+    for i = 2, track.numNodes do
+        local a, b = track.nodes[i-1], track.nodes[i]
+        total = total + #(vector3(a.x, a.y, a.z) - vector3(b.x, b.y, b.z))
+        cum[i] = total
+    end
+    cumCache[trackIndex] = { cum = cum, total = total }
+    return cumCache[trackIndex]
+end
+
+local function distAhead(trackIndex, fromNode, toNode)
+    local c = cumDist(trackIndex)
+    if not c then return nil end
+    local a = c.cum[math.max(1, math.min(fromNode, #c.cum))] or 0
+    local b = c.cum[math.max(1, math.min(toNode, #c.cum))] or 0
+    if b >= a then return b - a end
+    return (c.total - a) + b  -- wraps the loop
+end
+
+exports('getArrivalBoard', function()
+    local board = {}
+    for trackIndex, names in pairs(STATION_NAMES) do
+        local track = tracks[trackIndex]
+        if track and track.hasStationInformation and track:hasStationInformation() then
+            local ok, stations = pcall(function() return track:getStationInformation() end)
+            if ok and stations then
+                for si, st in ipairs(stations) do
+                    local entry = {
+                        station = names[st.node] or ('Stop ' .. si),
+                        node = st.node,
+                        track = trackIndex,
+                        coords = { x = st.coords.x, y = st.coords.y },
+                        arrivals = {},
+                    }
+                    for i = 1, #trackingTrains do
+                        local tr = trackingTrains[i]
+                        if tr and tr.trackIndex == trackIndex and tr.currentNode then
+                            local dist = distAhead(trackIndex, tr.currentNode, st.node)
+                            if dist then
+                                -- count intervening station dwells
+                                local stopsBetween = 0
+                                for _, st2 in ipairs(stations) do
+                                    local d2 = distAhead(trackIndex, tr.currentNode, st2.node)
+                                    if d2 and d2 > 1.0 and d2 < dist then stopsBetween = stopsBetween + 1 end
+                                end
+                                local avgSpeed = (trackIndex == 0) and 22.0 or 14.0
+                                local eta = dist / avgSpeed + stopsBetween * ((config.general.stationDwellTime or 60000) / 1000)
+                                local status = 'en route'
+                                if tr.private and tr.private.dwellUntil then
+                                    status = 'boarding'
+                                    eta = eta + math.max(0, (tr.private.dwellUntil - GetGameTimer()) / 1000)
+                                elseif tr.private and tr.private.headwayHold then
+                                    status = 'delayed'
+                                end
+                                local label, color = trainLabel(tr)
+                                entry.arrivals[#entry.arrivals + 1] = {
+                                    train = label, color = color,
+                                    eta = math.floor(eta), status = status,
+                                }
+                            end
+                        end
+                    end
+                    table.sort(entry.arrivals, function(a, b) return a.eta < b.eta end)
+                    board[#board + 1] = entry
+                end
+            end
+        end
+    end
+    return board
+end)

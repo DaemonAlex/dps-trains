@@ -12,25 +12,25 @@
 <!-- PASSENGER CONSISTS -->
 	<train_config name = "passenger_config01" populate_train_dist = "40.0" announce_stations = "false" doors_beep = "false" carriages_hang = "false" carriages_swing = "false" link_tracks_with_adjacent_stations = "false" no_random_spawn = "false" carriage_gap = "-0.2">
 		<carriage model_name = "streakcoaster" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.64" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakcoastercab" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
 	</train_config>
 
 	<train_config name = "passenger_config02" populate_train_dist = "40.0" announce_stations = "false" doors_beep = "false" carriages_hang = "false" carriages_swing = "false" link_tracks_with_adjacent_stations = "false" no_random_spawn = "false" carriage_gap = "-0.2">
 		<carriage model_name = "streak" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "streakc" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
+		<carriage model_name = "streakc" max_peds_per_carriage = "7" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
 		<carriage model_name = "streakcab" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
 	</train_config>
 

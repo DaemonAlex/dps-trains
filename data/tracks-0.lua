@@ -4230,13 +4230,15 @@ return {
         vec(1084.4800, 3231.4500, 39.2565),
     },
     stations = {
-        { coords = vec(-446.8200, 5362.5098, 80.6654), node = 454, side = 1 },  -- Lumber Mill
-        { coords = vec(111.8490, 6317.6001, 30.6872), node = 643, side = 1 },  -- Paleto Bay
-        { coords = vec(2599.3000, 2912.5701, 38.5686), node = 1467, side = 1 },  -- Quarry
-        { coords = vec(2450.2700, 2482.3501, 41.0655), node = 1547, side = 1 },  -- Wind Farm
-        { coords = vec(2610.9900, 1649.7100, 26.6153), node = 1693, side = 1 },  -- Power Plant
-        { coords = vec(669.2730, -1104.7900, 22.7443), node = 2418, side = 1 },  -- Downtown
-        { coords = vec(217.4270, -2436.6299, 6.2090), node = 2659, side = 1 },  -- Port Depot
-        { coords = vec(1870.6700, 3544.5901, 37.6682), node = 4151, side = 1 },  -- Sandy Shores Train Depot
+        { coords = vec(-446.8200, 5362.5098, 80.6654), node = 462, side = 1 },  -- Lumber Mill
+        { coords = vec(111.8490, 6317.6001, 30.6872), node = 651, side = 1 },  -- Paleto Bay
+        { coords = vec(2599.3000, 2912.5701, 38.5686), node = 1481, side = 1 },  -- Quarry (northbound)
+        { coords = vec(2450.2700, 2482.3501, 41.0655), node = 1555, side = 1 },  -- Wind Farm
+        { coords = vec(2610.9900, 1649.7100, 26.6153), node = 1701, side = 1 },  -- Power Plant
+        { coords = vec(669.2730, -1104.7900, 22.7443), node = 2434, side = 1 },  -- Downtown (northbound pass)
+        { coords = vec(217.4270, -2436.6299, 6.2090), node = 2667, side = 1 },  -- Port Depot
+        { coords = vec(669.2730, -1104.7900, 22.7443), node = 2865, side = 1 },  -- Downtown (return pass)
+        { coords = vec(2599.3000, 2912.5701, 38.5686), node = 3891, side = 1 },  -- Quarry (return pass)
+        { coords = vec(1870.6700, 3544.5901, 37.6682), node = 4159, side = 1 },  -- Sandy Shores Train Depot
     }
 }
