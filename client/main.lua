@@ -664,14 +664,29 @@ end)
 if config.general.showTrainBlips then
     ---@param blip number
     ---@param type string
-    local function setupBlipData(blip, type)
-        SetBlipSprite(blip, (config[type].trainBlipSprite or config.general.trainBlipSprite))
-        SetBlipScale(blip, (config[type].trainBlipScale or config.general.trainBlipScale))
-        SetBlipColour(blip, (config[type].trainBlipColor or config.general.trainBlipColor))
-        AddTextEntry(("EHBW-TRAINS-%s"):format(type), config[type].trainBlipName or config.general.trainBlipName)
-        SetBlipNameFromTextFile(blip, ("EHBW-TRAINS-%s"):format(type))
-        SetBlipAsShortRange(blip, config[type].trainBlipShortRange or false)
-        if config[type].trainBlipDisplay or config.general.trainBlipDisplay then
+    -- DPS: style blips per SERVICE, not just track type. Passenger consists are
+    -- variations 29/30 (see dps-trains-glossary): metro=blue, passenger=green,
+    -- freight=orange, all small.
+    local function setupBlipData(blip, trainData)
+        local type = trainData.type or trainData  -- tolerate old (blip, "type") calls
+        local variation = trainData.variation
+        local label, color
+        if type == 'metro' then
+            label, color = 'Metro', 3
+        elseif variation == 29 or variation == 30 then
+            label, color = 'Passenger Train', 2
+        elseif type == 'cablecar' then
+            label, color = 'Cable Car', 5
+        else
+            label, color = 'Freight Train', 17
+        end
+        SetBlipSprite(blip, (config[type] and config[type].trainBlipSprite or config.general.trainBlipSprite))
+        SetBlipScale(blip, 0.5)
+        SetBlipColour(blip, color)
+        AddTextEntry(("EHBW-TRAINS-%s"):format(label), label)
+        SetBlipNameFromTextFile(blip, ("EHBW-TRAINS-%s"):format(label))
+        SetBlipAsShortRange(blip, false)  -- trains show map-wide: the map IS the tracker
+        if config[type] and (config[type].trainBlipDisplay or config.general.trainBlipDisplay) then
             SetBlipDisplay(blip, config[type].trainBlipDisplay or config.general.trainBlipDisplay)
         end
     end
@@ -719,7 +734,7 @@ if config.general.showTrainBlips then
             else
                 local blip = AddBlipForCoord(xy.x, xy.y, 0.0)
                 trains[id].blip = blip
-                setupBlipData(blip, train.type)
+                setupBlipData(blip, train)
             end
             ::skip::
         end
@@ -746,7 +761,7 @@ if config.general.showTrainBlips then
         -- quickly cull blips incase
         local trainData = trains[value]
         local blip = AddBlipForEntity(train)
-        setupBlipData(blip, trainData.type)
+        setupBlipData(blip, trainData)
         trainData.entity = train
 
         if trainData.entityBlip then

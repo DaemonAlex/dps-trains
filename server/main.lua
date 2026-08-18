@@ -772,3 +772,21 @@ lib.addCommand("findTrain", {
         args = {"TRAINS", ("Location: %.3f, %.3f, %.3f"):format(coords.x, coords.y, coords.z)}
     })
 end)
+
+-- DPS diagnostic: dump every tracked train's ground truth to console
+RegisterCommand('traindebug', function(source)
+    if source ~= 0 then return end
+    local n = 0
+    for i = 1, #trackingTrains do
+        local tr = trackingTrains[i]
+        if tr then
+            n = n + 1
+            print(('[traindebug] id=%s type=%s track=%s node=%s handle=%s dwell=%s coords=%s'):format(
+                tostring(tr.id), tostring(tr.type), tostring(tr.trackIndex),
+                tostring(tr.currentNode), tostring(tr.handle),
+                tostring(tr.private and tr.private.dwellUntil),
+                tr.currentCoords and ('%.0f,%.0f'):format(tr.currentCoords.x, tr.currentCoords.y) or 'nil'))
+        end
+    end
+    print(('[traindebug] %d trains tracked'):format(n))
+end, true)

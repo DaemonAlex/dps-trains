@@ -20,6 +20,7 @@ shared_script '@ox_lib/init.lua'
 
 client_scripts {
     'client/main.lua',
+    'client/stationblips.lua',
     'client/drive.lua'
 }
 
