@@ -991,7 +991,11 @@ exports('getArrivalBoard', function()
                                     local d2 = distAhead(trackIndex, tr.currentNode, st2.node)
                                     if d2 and d2 > 1.0 and d2 < dist then stopsBetween = stopsBetween + 1 end
                                 end
-                                local avgSpeed = (trackIndex == 0) and 22.0 or 14.0
+                                -- Use the train's own cruise speed. This was hardcoded to
+                                -- 22 m/s for the mainline while configs/freight.lua sets
+                                -- config.speed = 11, so every mainline ETA on the phone
+                                -- board displayed at roughly half the real wait.
+                                local avgSpeed = tr.speed or ((trackIndex == 0) and 11.0 or 14.0)
                                 local eta = dist / avgSpeed + stopsBetween * ((config.general.stationDwellTime or 60000) / 1000)
                                 local status = 'en route'
                                 if tr.private and tr.private.dwellUntil then
