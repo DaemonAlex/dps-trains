@@ -7,7 +7,7 @@ config.enabled = true
 config.enablePlayerDriving = true
 
 --- The freight trains
-config.count = 4
+config.count = 3
 
 --- Should Freight trains have a blip on the map
 config.showTrainBlips = false  -- DPS: no map blips; the Transit app is the source of truth
@@ -48,28 +48,33 @@ config.trainBlipName = "Train"
 config.shouldStopAtStations = true
 
 config.startLocations = {
-    -- TRAINCONFIGS_FILE appends: custom consists live AFTER the 29 vanilla
-    -- entries (b3258): vanilla is 0-27 (metro last at 27), customs start at 28.
-    -- 28 = passenger_config01 (Amtrak: streakcoaster + streakc)
-    -- 29 = passenger_config02 (brownstreak: streak + streakc + streakcab)
-    -- 30 = freight_config01  (sd70mac + mixed freight + caboose)
+    -- 3 passenger trains, no freight. Every train now behaves identically:
+    -- all stop, all open doors. The freight consist stopped but never opened
+    -- doors, which reads as broken to a player who does not know why.
     --
-    -- Spawn points are chosen by NODE INDEX, not by picking depots off the map.
-    -- Track 0 is 4226 nodes and folds back on itself (Sandy -> Paleto -> NE ->
-    -- Grapeseed -> East LS -> Port, then retracing), so two points that look far
-    -- apart on the map can be adjacent in the sequence and two that look
-    -- adjacent can be half a loop apart. Spacing by index is what actually
-    -- controls how often a train shows up at a platform. Use /trainspace 0 4
-    -- to regenerate these. Uneven remainder is fine: the schedule regulation in
-    -- server/main.lua trims it out via dwell over the first few laps.
-    {coords = vec3(1084.480, 3231.450, 39.256), direction = true, variation = 28, doors = true},   -- node 1    Sandy Shores  Amtrak
-    {coords = vec3(2580.920, 5572.750, 60.652), direction = true, variation = 29, doors = true},   -- node 1057 north east   brownstreak
-    {coords = vec3(2104.020, -680.388, 95.890), direction = true, variation = 30, doors = false},  -- node 2113 east LS      freight
-    {coords = vec3(1914.500, 2152.840, 61.154), direction = true, variation = 28, doors = true},   -- node 3697 Grapeseed    Amtrak
+    -- Positions are given as NODE indices, not coordinates. CTrain derives
+    -- currentCoords from the node (self.currentCoords = track:getNodeCoords),
+    -- so this is exact - no picking points off a map and hoping. Track 0 has
+    -- 4226 nodes, so even thirds are 1 / 1410 / 2819.
+    --
+    -- Spacing matters because station stops only happen for MATERIALISED trains
+    -- (the logic lives inside `if self.handle`), so a train near a player loses
+    -- dwell time that ghost trains elsewhere do not. 3 trains gives a 7 min
+    -- headway against ~200s worst-case drift per lap at a 30s dwell - a wide
+    -- enough margin that the dwell regulation can hold it.
+    {node = 1,    direction = true, variation = 28, doors = true},   -- Axsellya Express
+    {node = 1410, direction = true, variation = 29, doors = true},   -- Brown Streak
+    {node = 2819, direction = true, variation = 28, doors = true},   -- Axsellya Express
 }
 
 
+
 --- The default cruise speed for all default freight trains
-config.speed = 11
+-- Single line speed, m/s. 28 ~= 62 mph.
+-- Set once at creation; every later change goes through the trainSpeed state
+-- bag, and the client's SetTrainSpeed call is commented out - so changes are
+-- advisory. One speed means the value is applied at spawn and never needs
+-- updating, which avoids that path entirely.
+config.speed = 28
 
 return config

@@ -14,6 +14,15 @@ setmetatable(config, nil)
 
 ---@type table<number>
 clients = {}
+-- stuck-train tracking, keyed by train id (see stranded-train recovery below)
+local stuckWatch = {}
+-- physical-separation holds, keyed by train id. Cannot live on train.private:
+-- that is a protected ox_lib class field and rejects new keys.
+local physHoldState = {}
+-- headway holds and dwell-regulation bookkeeping, keyed by train id. Same
+-- reason as physHoldState: train.private rejects writes from outside the class.
+local headwayState = {}
+local dwellRegulated = {}
 
 ---@type table<number, CTracks>
 tracks = {}
@@ -245,16 +254,102 @@ local function iterateTrains()
                 end
             end
             local state = a.getState and a:getState()
-            if blocked and not a.private.headwayHold then
-                a.private.headwayHold = true
+            if blocked and not headwayState[a.id] then
+                headwayState[a.id] = true
                 if state then state:set("trainSpeed", 0.0, true) end
                 lib.print.debug(("Train %i holding for headway"):format(a.id))
-            elseif not blocked and a.private.headwayHold then
-                a.private.headwayHold = nil
+            elseif not blocked and headwayState[a.id] then
+                headwayState[a.id] = nil
                 local resumeSpeed = DPS_ZoneSpeed and DPS_ZoneSpeed(a.trackIndex, a.currentNode, a.speed) or a.speed
                 if state then state:set("trainSpeed", resumeSpeed, true) end
-                a.private.appliedZoneSpeed = resumeSpeed
                 lib.print.debug(("Train %i resuming, headway clear"):format(a.id))
+            end
+        end
+    end
+
+    -- DPS stranded-train recovery.
+    --
+    -- A materialised train is driven by the game engine client-side; the server
+    -- only derives its node from the entity's real position. UpdatePosition -
+    -- which contains the wrap back to node 1 - runs for GHOST trains only. So a
+    -- materialised train that reaches the final node has nothing to wrap it: the
+    -- engine parks it at the end of the line and it sits there forever, while
+    -- the server keeps believing it is cruising because the zone-speed block
+    -- only sends a command when the target CHANGES.
+    --
+    -- Observed: train 7 pinned at node 4226 (the last node on track 0) for an
+    -- entire session while every other train advanced, with a player catching
+    -- and overtaking it.
+    --
+    -- State is held in a local table, NOT on train.private - that is a protected
+    -- ox_lib class field and rejects new keys ("cannot set value of private
+    -- field").
+    local STUCK_AFTER_MS = 45000
+    local nowMs = GetGameTimer()
+    for i = 1, #trackingTrains do
+        local tr = trackingTrains[i]
+        if tr and tr.id then
+            local held = (tr.private and tr.private.dwellUntil) or headwayState[tr.id]
+                         or physHoldState[tr.id]
+            if tr.handle and tr.currentNode and not held and not tr.isPlayerDriven then
+                local rec = stuckWatch[tr.id]
+                if not rec or rec.node ~= tr.currentNode then
+                    stuckWatch[tr.id] = { node = tr.currentNode, since = nowMs }
+                elseif (nowMs - rec.since) > STUCK_AFTER_MS then
+                    lib.print.warn(("Train %i has not advanced from node %s for %ds - culling for respawn")
+                        :format(tr.id, tostring(tr.currentNode), math.floor(STUCK_AFTER_MS / 1000)))
+                    stuckWatch[tr.id] = nil
+                    if tr.Remove then tr:Remove() end
+                end
+            else
+                stuckWatch[tr.id] = nil
+            end
+        end
+    end
+
+    -- DPS physical separation.
+    --
+    -- The headway hold above compares TRACK SEQUENCE only. Track 0 folds back on
+    -- itself, so two trains can sit 44 m apart on the ground while being ~1,300
+    -- nodes apart in the node list. The node check sees a huge gap, concludes
+    -- there is no conflict, and the trains drive straight through each other -
+    -- observed from inside one of them.
+    --
+    -- So also compare real distance. Only ONE train of a conflicting pair is
+    -- ever held (the higher id, chosen deterministically) - holding both would
+    -- deadlock two trains meeting on a fold-back with neither able to clear.
+    -- Separate hold/clear thresholds give hysteresis so a pair sitting near the
+    -- boundary cannot oscillate between held and released every tick.
+    local PHYS_HOLD  = 60.0
+    local PHYS_CLEAR = 95.0
+
+    for i = 1, #trackingTrains do
+        local a = trackingTrains[i]
+        if a and a.currentCoords and a.private and not a.private.dwellUntil and not headwayState[a.id] then
+            local conflict = false
+            for j = 1, #trackingTrains do
+                local b = trackingTrains[j]
+                if b and b ~= a and b.currentCoords and b.id < a.id then
+                    local d = #(vector3(a.currentCoords.x, a.currentCoords.y, a.currentCoords.z)
+                             -  vector3(b.currentCoords.x, b.currentCoords.y, b.currentCoords.z))
+                    local limit = physHoldState[a.id] and PHYS_CLEAR or PHYS_HOLD
+                    if d < limit then
+                        conflict = true
+                        break
+                    end
+                end
+            end
+
+            local state = a.getState and a:getState()
+            if conflict and not physHoldState[a.id] then
+                physHoldState[a.id] = true
+                if state then state:set("trainSpeed", 0.0, true) end
+                lib.print.debug(("Train %i holding: another train is physically alongside"):format(a.id))
+            elseif not conflict and physHoldState[a.id] then
+                physHoldState[a.id] = nil
+                local resumeSpeed = DPS_ZoneSpeed and DPS_ZoneSpeed(a.trackIndex, a.currentNode, a.speed) or a.speed
+                if state then state:set("trainSpeed", resumeSpeed, true) end
+                lib.print.debug(("Train %i resuming, physically clear"):format(a.id))
             end
         end
     end
@@ -279,7 +374,7 @@ local function iterateTrains()
     for i=1, #trackingTrains do
         local a = trackingTrains[i]
         if a and a.private and a.private.dwellUntil and a.currentNode
-           and a.private.dwellRegulated ~= a.private.servedStation then
+           and dwellRegulated[a.id] ~= a.private.servedStation then
             local trk = tracks[a.trackIndex]
             local num = trk and trk.numNodes or 0
             local n = perTrack[a.trackIndex] or 1
@@ -296,8 +391,10 @@ local function iterateTrains()
                     local ideal = num / n
                     local scale = 2.0 - (gapAhead / ideal)
                     if scale < 0.4 then scale = 0.4 elseif scale > 2.0 then scale = 2.0 end
-                    a.private.dwellUntil = GetGameTimer() + math.floor(baseDwell * scale)
-                    a.private.dwellRegulated = a.private.servedStation
+                    if a.SetDwellUntil then
+                        a:SetDwellUntil(GetGameTimer() + math.floor(baseDwell * scale))
+                    end
+                    dwellRegulated[a.id] = a.private.servedStation
                     lib.print.debug(("Train %i regulating: gap %d of ideal %.0f nodes, dwell x%.2f"):format(
                         a.id, gapAhead, ideal, scale))
                 end
@@ -926,9 +1023,12 @@ local TRAIN_LABELS = {
     metro = { label = 'Metro', color = '#4aa3ff' },
 }
 local function trainLabel(train)
-    if train.type == 'metro' then return 'Metro ' .. train.id, '#4aa3ff' end
-    if train.variation == 28 then return 'Passenger 1', '#3ad06a' end
-    if train.variation == 29 then return 'Passenger 2', '#e8d24a' end
+    -- Named the way a passenger reads a departure board. Brown Streak Railroad
+    -- is the GTA rail company the streak model family is named for; Axsellya
+    -- Express is the DPS name for the coaster set.
+    if train.type == 'metro' then return 'Metro', '#4aa3ff' end
+    if train.variation == 28 then return 'Axsellya Express', '#3ad06a' end
+    if train.variation == 29 then return 'Brown Streak', '#e8d24a' end
     return 'Freight', '#f08a3c'
 end
 
@@ -1004,6 +1104,7 @@ exports('getArrivalBoard', function()
                                 entry.arrivals[#entry.arrivals + 1] = {
                                     train = label, color = color,
                                     eta = math.floor(eta), status = status,
+                                    stopsAway = stopsBetween,
                                 }
                             end
                         end

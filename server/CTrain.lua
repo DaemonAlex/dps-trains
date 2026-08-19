@@ -6,10 +6,13 @@
 -- Node ranges from data/tracks-0.lua geography.
 -- ============================================
 local SPEED_ZONES = {
-    [0] = {
-        { from = 2150, to = 3350, speed = 16.0, name = 'city corridor' },
-        -- everything else on track 0 runs the open-country speed below
-    },
+    -- Deliberately empty: one speed line-wide.
+    -- The city corridor used to run at 16 m/s (36 mph), which is painfully slow
+    -- in a passenger train. Zones also depend on changing speed mid-run, and the
+    -- client's SetTrainSpeed is commented out so those changes may never apply -
+    -- making zones the feature most exposed to the one mechanism known to be
+    -- broken. Add ranges back here if per-area speeds are ever wanted.
+    [0] = {},
 }
 local OPEN_SPEED = 28.0
 
@@ -117,9 +120,30 @@ function Train:constructor(data)
         self:CreateEntity()
     end
 
-    if self.hasTrainBlip then
-        TriggerClientEvent("Ehbw-Trains:registerTrainInfo", -1, self:GetClientInfo())
-    end
+    -- Sent unconditionally. This is metadata (id, type, variation), NOT a blip.
+    -- It is the only thing that populates the client's trains[] table, which the
+    -- client needs to associate the entity, apply the ignoreObstructions flag,
+    -- and fire Ehbw-Trains:trainEnteredScope that other resources hook.
+    --
+    -- Gating it on hasTrainBlip meant that turning moving-train blips off - which
+    -- DPS does deliberately, the Transit app being the source of truth - stopped
+    -- clients being told trains exist at all. The symptom is a client warning
+    -- "Invalid train state" every time a train's state bag updates, because
+    -- trains[id] is nil and the handler bails before assigning .entity.
+    --
+    -- Blip DRAWING is separately driven by Ehbw-Trains:updBlipCoords, which the
+    -- server still only sends when config.general.showTrainBlips is true, so no
+    -- blips come back from this.
+    TriggerClientEvent("Ehbw-Trains:registerTrainInfo", -1, self:GetClientInfo())
+end
+
+---Set (or clear) the station dwell deadline.
+---Exists because private fields are only writable from inside the class; the
+---dwell regulation in server/main.lua needs to extend or shorten a dwell and
+---cannot touch self.private directly.
+---@param value number?
+function Train:SetDwellUntil(value)
+    self.private.dwellUntil = value
 end
 
 function Train:GetClientInfo()

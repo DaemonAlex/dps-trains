@@ -3,37 +3,24 @@ local config = {}
 -- A fallback list if a train variation is not loaded in data/tracks.lua.
 -- You should aim to add all train models in your server.
 config.trainModels = {
-    `foxbox`,
-    `freightbeam`,
-    `freightbeamc`,
-    `freightbox`,
-    `freightboxlarge`,
-    `freightc`,
+    -- MUST match what [dps]/dps-trains-stock actually streams.
+    -- client/main.lua falls back to this whole list when a variation is
+    -- not in its per-variation table, and loadModels blocks on each entry
+    -- until it times out. Listing a model the server does not ship makes
+    -- every train creation exceed the server's 10s window, which surfaces
+    -- as "failed to create train in time" with no other error.
+    -- The stock pack shipped 30 models; only these are streamed now.
     `freightcaboose`,
-    `freightcoal`,
-    `freightcont`,
-    `freightdef`,
     `freightflat`,
     `freightflatlogs`,
-    `freightflattank`,
     `freightgondola`,
-    `freightgraincar`,
-    `freighthopper`,
-    `freightrack`,
-    `freightstack`,
-    `freighttankbulk`,
     `freighttanklong`,
-    `gevo`,
-    `metrotrain`,
     `sd70mac`,
     `streak`,
-    `streak42`,
     `streakc`,
     `streakcab`,
-    `streakclassic`,
     `streakcoaster`,
-    `streakcoasterc`,
-    `streakcoastercab`,
+    `metrotrain`,
 }
 
 if not isServer then
@@ -152,7 +139,19 @@ config.useHighPrecisionBlending = true
 config.showTrainBlips = false  -- DPS: map decluttered; station blips (short-range) remain
 
 --- How long a train holds at each station before departing (ms). DPS: 1 minute.
-config.stationDwellTime = 60000
+-- 10s. Long enough to board if you are waiting on the platform, short enough
+-- that a stopped train does not read as broken.
+--
+-- It is also the main lever on train spacing. Station stops only happen for
+-- MATERIALISED trains (the logic sits inside `if self.handle`), so a train near
+-- a player loses this much time per station while ghost trains elsewhere run
+-- non-stop. Across 10 mainline stations that divergence is:
+--     60s dwell -> 10   min drift per lap
+--     30s dwell ->  5   min
+--     10s dwell ->  1.7 min
+-- At 1.7 min the dwell regulation in server/main.lua can actually correct the
+-- drift; at 10 min it never could.
+config.stationDwellTime = 30000
 
 --- The sprite for the train blip
 config.trainBlipSprite = 795
@@ -188,7 +187,11 @@ config.deleteDistance = 500.0
 --- The default speed of metro and trains, between 0 - 30
 --- Trains cannot have a negative speed without having a negative effect for remote (other) players
 --- Trains also cannot have a speed above 30 without potentially desynchronizing between clients (as 30.f is the max cruiseSpeed value in CTrainGameStateDataNode)
-config.defaultSpeed = 26  -- m/s (~58mph). Cap is 30 unless unlimitSpeed; note server/main.lua reads THIS, not config.freight.speed
+config.defaultSpeed = 30  -- m/s (~67mph). This is the HARD ceiling: 30.0 is the max
+-- cruiseSpeed representable in CTrainGameStateDataNode, so anything above it
+-- desyncs trains between clients regardless of unlimitSpeed. server/main.lua
+-- reads THIS value (freight.speed or config.general.defaultSpeed), NOT
+-- config.freight.speed - setting that one has no effect.
 
 --- Candidate Selection options (only used when server-setters are disabled)
 --- Should the best candidate (those within config.recreateTrainDistance or 424.0 units of the trains respawn location)
