@@ -36,14 +36,20 @@
 
 <!-- FREIGHT CONSISTS	 -->
 	<train_config name = "freight_config01" populate_train_dist = "40.0" announce_stations = "false" doors_beep = "false" carriages_hang = "false" carriages_swing = "false" link_tracks_with_adjacent_stations = "false" no_random_spawn = "false" carriage_gap = "-0.2">
+		<!-- DPS: rebuilt to reuse models. Texture memory is charged per UNIQUE
+		     model, not per carriage, so a long train that repeats wagons is far
+		     cheaper than a short one that does not. The stock consist here was
+		     nine cars of nine different models - a showcase of the pack rather
+		     than a train - and cost 399 MB of VRAM on its own.
+		     This is 8 cars from 5 models at ~101 MB:
+		       sd70mac 40 + flatlogs 3 + tanklong 24 + gondola 22 + caboose 12
+		     The expensive wagons (cont 64, coal 56, boxlarge 72, graincar 56,
+		     stack 72) are deliberately left out; they are still available in
+		     variations 31-43 if a heavier consist is ever wanted. -->
 		<carriage model_name = "sd70mac" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "1" />
-		<carriage model_name = "freightcont" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.55" repeat_count = "1" />
-		<carriage model_name = "freighttanklong" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.55" repeat_count = "1" />
-		<carriage model_name = "freightcoal" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "1" />
-		<carriage model_name = "freightboxlarge" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.55" repeat_count = "1" />
-		<carriage model_name = "freightgraincar" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.55" repeat_count = "1" />
-		<carriage model_name = "freightflatlogs" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.55" repeat_count = "1" />
-		<carriage model_name = "freightstack" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.7" repeat_count = "1" />
+		<carriage model_name = "freightflatlogs" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.55" repeat_count = "2" />
+		<carriage model_name = "freighttanklong" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.55" repeat_count = "2" />
+		<carriage model_name = "freightgondola" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "2" />
 		<carriage model_name = "freightcaboose" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "1" />
 	</train_config>
 
