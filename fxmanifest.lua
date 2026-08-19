@@ -16,17 +16,24 @@ dependencies
     'ox_lib'
 }
 
--- Registers the custom consists. Without this the game only knows the 28
--- vanilla train configs (0-27) and CREATE_MISSION_TRAIN rejects any variation
--- above 27, so every mainline spawn failed with "Invalid train variation index
--- was passed to CREATE_MISSION_TRAIN (28)". The resource parses trains.xml
--- itself server-side, so it believed the consists existed while the game did
--- not - which is why trains tracked fine but never materialised.
+-- NO data_file 'TRAINCONFIGS_FILE' HERE, deliberately.
 --
--- TRAINCONFIGS_FILE APPENDS to the vanilla table, so our 18 configs land at
--- 28-45: 28 = passenger_config01 (Amtrak), 29 = passenger_config02
--- (brownstreak), 30 = freight_config01 (mixed freight).
-data_file 'TRAINCONFIGS_FILE' 'trains.xml'
+-- Registering trains.xml from this resource crashed clients on join with an
+-- access violation inside the game's parser:
+--   "An exception occurred (c0000005) during loading of
+--    resources:/dps-trains/trains.xml in data file mounter"
+--
+-- The file itself is sound - all 31 models it names are declared in
+-- trainsoverhauled/data/vehicles.meta. The difference from the working setup
+-- is WHERE it is registered: the pack ships TRAINCONFIGS_FILE inside the same
+-- map resource as its models, while this is a plain script resource in a
+-- category that loads earlier.
+--
+-- Without a registered consist table the game only knows its own 28 vanilla
+-- configs (0-27), so configs/*.lua must use variation indices in that range.
+-- configs/metro.lua puts it plainly: an invalid variation index crashes
+-- clients that are not on canary.
+
 
 shared_script '@ox_lib/init.lua'
 

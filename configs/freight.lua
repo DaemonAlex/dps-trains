@@ -48,25 +48,24 @@ config.trainBlipName = "Train"
 config.shouldStopAtStations = true
 
 config.startLocations = {
-    -- TRAINCONFIGS_FILE appends: custom consists live AFTER the 29 vanilla
-    -- entries (b3258): vanilla is 0-27 (metro last at 27), customs start at 28.
-    -- 28 = passenger_config01 (Amtrak: streakcoaster + streakc)
-    -- 29 = passenger_config02 (brownstreak: streak + streakc + streakcab)
-    -- 30 = freight_config01  (sd70mac + mixed freight + caboose)
+    -- VANILLA consist variations only. 15 and 20 are the two the upstream Ehbw
+    -- resource ships with, so they are known to exist in the base game's table
+    -- and are proven in the wild. Anything above 27 requires a registered
+    -- TRAINCONFIGS_FILE, and an index the game does not have crashes the client
+    -- outright rather than failing gracefully.
     --
-    -- Spawn points are chosen by NODE INDEX, not by picking depots off the map.
-    -- Track 0 is 4226 nodes and folds back on itself (Sandy -> Paleto -> NE ->
-    -- Grapeseed -> East LS -> Port, then retracing), so two points that look far
-    -- apart on the map can be adjacent in the sequence and two that look
-    -- adjacent can be half a loop apart. Spacing by index is what actually
-    -- controls how often a train shows up at a platform. Use /trainspace 0 4
-    -- to regenerate these. Uneven remainder is fine: the schedule regulation in
-    -- server/main.lua trims it out via dwell over the first few laps.
-    {coords = vec3(1084.480, 3231.450, 39.256), direction = true, variation = 28, doors = true},   -- node 1    Sandy Shores  Amtrak
-    {coords = vec3(2580.920, 5572.750, 60.652), direction = true, variation = 29, doors = true},   -- node 1057 north east   brownstreak
-    {coords = vec3(2104.020, -680.388, 95.890), direction = true, variation = 30, doors = false},  -- node 2113 east LS      freight
-    {coords = vec3(1914.500, 2152.840, 61.154), direction = true, variation = 28, doors = true},   -- node 3697 Grapeseed    Amtrak
+    -- Spawn points are chosen by NODE INDEX via the /trainspace command, not by
+    -- picking depots off the map. Track 0 is 4226 nodes and folds back on
+    -- itself, so map distance is not sequence distance, and it is sequence
+    -- distance that decides how often a train reaches a platform.
+    --
+    -- doors = false: these are freight consists with no door components.
+    {coords = vec3(1084.480, 3231.450, 39.256), direction = true, variation = 15, doors = false},  -- node 1    Sandy Shores
+    {coords = vec3(2580.920, 5572.750, 60.652), direction = true, variation = 20, doors = false},  -- node 1057 north east
+    {coords = vec3(2104.020, -680.388, 95.890), direction = true, variation = 15, doors = false},  -- node 2113 east LS
+    {coords = vec3(1914.500, 2152.840, 61.154), direction = true, variation = 20, doors = false},  -- node 3697 Grapeseed
 }
+
 
 
 --- The default cruise speed for all default freight trains
