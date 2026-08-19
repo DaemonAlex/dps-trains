@@ -115,7 +115,6 @@
 	<train_config name = "freight_config13" populate_train_dist = "40.0" announce_stations = "false" doors_beep = "false" carriages_hang = "false" carriages_swing = "false" link_tracks_with_adjacent_stations = "false" no_random_spawn = "false" carriage_gap = "-0.2">
 		<carriage model_name = "sd70mac" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "1" /> 			<!--BD SKIN-->
 		<carriage model_name = "freightbox" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "4" /> 		<!--BD SKIN-->
-		<carriage model_name = "foxbox" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = ".99" repeat_count = "1" />
 		<carriage model_name = "freightbox" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "3" /> 		<!--BD SKIN-->
 		<carriage model_name = "freightcaboose" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.65" repeat_count = "1" />	<!--BD SKIN-->
 	</train_config>
@@ -167,7 +166,6 @@
 		<carriage model_name = "streakcab" max_peds_per_carriage = "7" flip_model_dir = "true" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
 		<carriage model_name = "streakcoasterc" max_peds_per_carriage = "10" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "3" />
 		<carriage model_name = "streakcoastercab" max_peds_per_carriage = "7" flip_model_dir = "true" do_interior_lights = "true" carriage_vert_offset = "1.76" repeat_count = "1" />
-		<carriage model_name = "foxbox" max_peds_per_carriage = "0" flip_model_dir = "false" do_interior_lights = "true" carriage_vert_offset = ".99" repeat_count = "1" />
 	</train_config>
 -->
 
