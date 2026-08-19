@@ -21,13 +21,18 @@ local STATIONS = {
     { name = 'Portola Drive',     coords = vec3(-848.52, -148.13, 18.04), metro = true },
 }
 
+-- Declared BEFORE the thread that fills it. It was previously declared further
+-- down the file, so the thread indexed a nil global and every station blip
+-- failed with "attempt to get length of a nil value".
+local stationBlips = {}
+
 CreateThread(function()
     for _, s in ipairs(STATIONS) do
         local blip = AddBlipForCoord(s.coords.x, s.coords.y, s.coords.z)
         stationBlips[#stationBlips + 1] = blip
         SetBlipSprite(blip, 795)                     -- train icon
         SetBlipColour(blip, s.metro and 3 or 0)      -- metro blue, mainline white
-        SetBlipScale(blip, 0.65)
+        SetBlipScale(blip, 0.5)   -- small: wayfinding, not map furniture
         SetBlipAsShortRange(blip, true)
         BeginTextCommandSetBlipName('STRING')
         AddTextComponentSubstringPlayerName(s.name)
@@ -36,7 +41,6 @@ CreateThread(function()
 end)
 
 -- track blips so a resource restart (without a client reconnect) doesn't orphan them
-local stationBlips = {}
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     for _, b in ipairs(stationBlips) do if DoesBlipExist(b) then RemoveBlip(b) end end

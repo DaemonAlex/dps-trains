@@ -7,10 +7,10 @@ config.enabled = true
 config.enablePlayerDriving = true
 
 --- The freight trains
-config.count = 3
+config.count = 4
 
 --- Should Freight trains have a blip on the map
-config.showTrainBlips = true
+config.showTrainBlips = false  -- DPS: no map blips; the Transit app is the source of truth
 
 --- What blip sprite should be used for freight trains
 config.trainBlipSprite = 795
@@ -50,11 +50,24 @@ config.shouldStopAtStations = true
 config.startLocations = {
     -- TRAINCONFIGS_FILE appends: custom consists live AFTER the 29 vanilla
     -- entries (b3258): vanilla is 0-27 (metro last at 27), customs start at 28.
-    -- 28 = passenger_config01, 29 = passenger_config02, 30 = freight_config01. Rotation: two passenger, one freight.
-    {coords = vec3(-378.860, 3845.750, 74.095), direction = true, variation = 28, doors = true},  -- passenger (streak coaster)
-    {coords = vec3(2592.550, 2141.790, 31.265), direction = true, variation = 29, doors = true},  -- passenger
-    {coords = vec3(1260.960, -805.591, 45.301), direction = true, variation = 30, doors = false},  -- freight
+    -- 28 = passenger_config01 (Amtrak: streakcoaster + streakc)
+    -- 29 = passenger_config02 (brownstreak: streak + streakc + streakcab)
+    -- 30 = freight_config01  (sd70mac + mixed freight + caboose)
+    --
+    -- Spawn points are chosen by NODE INDEX, not by picking depots off the map.
+    -- Track 0 is 4226 nodes and folds back on itself (Sandy -> Paleto -> NE ->
+    -- Grapeseed -> East LS -> Port, then retracing), so two points that look far
+    -- apart on the map can be adjacent in the sequence and two that look
+    -- adjacent can be half a loop apart. Spacing by index is what actually
+    -- controls how often a train shows up at a platform. Use /trainspace 0 4
+    -- to regenerate these. Uneven remainder is fine: the schedule regulation in
+    -- server/main.lua trims it out via dwell over the first few laps.
+    {coords = vec3(1084.480, 3231.450, 39.256), direction = true, variation = 28, doors = true},   -- node 1    Sandy Shores  Amtrak
+    {coords = vec3(2580.920, 5572.750, 60.652), direction = true, variation = 29, doors = true},   -- node 1057 north east   brownstreak
+    {coords = vec3(2104.020, -680.388, 95.890), direction = true, variation = 30, doors = false},  -- node 2113 east LS      freight
+    {coords = vec3(1914.500, 2152.840, 61.154), direction = true, variation = 28, doors = true},   -- node 3697 Grapeseed    Amtrak
 }
+
 
 --- The default cruise speed for all default freight trains
 config.speed = 11

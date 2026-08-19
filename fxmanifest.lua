@@ -20,7 +20,7 @@ shared_script '@ox_lib/init.lua'
 
 client_scripts {
     'client/main.lua',
-    'client/stationblips.lua',
+    'client/stationblips.lua',  -- DPS: small short-range STOP blips only; no moving vehicle blips
     'client/drive.lua'
 }
 

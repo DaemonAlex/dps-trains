@@ -9,7 +9,7 @@ config.variation = 16
 config.count = 2
 
 --- Should Freight trains have a blip on the map
-config.showTrainBlips = true
+config.showTrainBlips = false  -- DPS: no map blips; the Transit app is the source of truth
 
 --- What blip sprite should be used for freight trains
 config.trainBlipSprite = 36

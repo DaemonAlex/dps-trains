@@ -259,6 +259,52 @@ local function iterateTrains()
         end
     end
 
+    -- DPS schedule regulation. The headway hold above only prevents a rear-end;
+    -- it does nothing about bunching, where two trains orbit the loop a few
+    -- hundred metres apart and the line effectively runs one fewer service.
+    -- So each train, once stopped at a station, compares its gap to the train
+    -- ahead against the ideal even spacing for its track and uses dwell as the
+    -- correction: bunched trains hold longer and drop back into their slot, a
+    -- train with an oversized gap ahead cuts its dwell short and catches up.
+    -- Dwell stays within 0.4x-2.0x the configured base so this reads as normal
+    -- variation in stop length rather than a train parked at a platform.
+    -- Applied once per station stop (keyed on servedStation) so it cannot
+    -- oscillate as the gap changes while sitting.
+    local baseDwell = (config.general and config.general.stationDwellTime) or 180000
+    local perTrack = {}
+    for i=1, #trackingTrains do
+        local t = trackingTrains[i]
+        if t and t.trackIndex then perTrack[t.trackIndex] = (perTrack[t.trackIndex] or 0) + 1 end
+    end
+    for i=1, #trackingTrains do
+        local a = trackingTrains[i]
+        if a and a.private and a.private.dwellUntil and a.currentNode
+           and a.private.dwellRegulated ~= a.private.servedStation then
+            local trk = tracks[a.trackIndex]
+            local num = trk and trk.numNodes or 0
+            local n = perTrack[a.trackIndex] or 1
+            if num > 0 and n > 1 then
+                local gapAhead
+                for j=1, #trackingTrains do
+                    local b = trackingTrains[j]
+                    if b and j ~= i and b.trackIndex == a.trackIndex and b.currentNode then
+                        local gap = (b.currentNode - a.currentNode) % num
+                        if gap > 0 and (not gapAhead or gap < gapAhead) then gapAhead = gap end
+                    end
+                end
+                if gapAhead then
+                    local ideal = num / n
+                    local scale = 2.0 - (gapAhead / ideal)
+                    if scale < 0.4 then scale = 0.4 elseif scale > 2.0 then scale = 2.0 end
+                    a.private.dwellUntil = GetGameTimer() + math.floor(baseDwell * scale)
+                    a.private.dwellRegulated = a.private.servedStation
+                    lib.print.debug(("Train %i regulating: gap %d of ideal %.0f nodes, dwell x%.2f"):format(
+                        a.id, gapAhead, ideal, scale))
+                end
+            end
+        end
+    end
+
     if blipData and config.general.showTrainBlips then
         if sv_enableNetEventReassembly then
             lib.triggerClientEvent("Ehbw-Trains:updBlipCoords", clients, blipData)
@@ -810,6 +856,31 @@ lib.addCommand("findTrain", {
 end)
 
 -- DPS diagnostic: dump every tracked train's ground truth to console
+-- Prints `count` evenly spaced node coordinates around a track, formatted ready
+-- to paste into a configs/*.lua startLocations table. Spawning trains at depots
+-- that happen to sit near each other bunches them: two trains a couple of km
+-- apart on a 30 km loop arrive together and the line reads as one fewer service
+-- than it has. Spacing by node index avoids guessing from map positions.
+RegisterCommand('trainspace', function(source, args)
+    if source ~= 0 then return end
+    local trackIndex = tonumber(args[1])
+    local count = tonumber(args[2]) or 4
+    local track = trackIndex and tracks[trackIndex]
+    if not track or not track.numNodes then
+        print('[trainspace] usage: trainspace <trackIndex> <count>')
+        return
+    end
+    local step = math.floor(track.numNodes / count)
+    print(('[trainspace] track %d has %d nodes, step %d'):format(trackIndex, track.numNodes, step))
+    for i = 0, count - 1 do
+        local idx = 1 + i * step
+        local c = track:getNodeCoords(idx)
+        if c then
+            print(('[trainspace] node %d -> {coords = vec3(%.3f, %.3f, %.3f), direction = true},'):format(idx, c.x, c.y, c.z))
+        end
+    end
+end, true)
+
 RegisterCommand('traindebug', function(source)
     if source ~= 0 then return end
     local n = 0
@@ -865,12 +936,21 @@ local cumCache = {}
 local function cumDist(trackIndex)
     if cumCache[trackIndex] then return cumCache[trackIndex] end
     local track = tracks[trackIndex]
-    if not track or not track.nodes then return nil end
+    if not track or not track.numNodes then return nil end
+    -- Use the accessor, not track.nodes: that field is not populated at runtime,
+    -- so cumDist returned nil for every track, distAhead always returned nil and
+    -- the phone board showed "no service" at every station.
+    local getNode = track.getNodeCoords
+    if not getNode then return nil end
     local cum, total = { [1] = 0.0 }, 0.0
+    local prev = track:getNodeCoords(1)
+    if not prev then return nil end
     for i = 2, track.numNodes do
-        local a, b = track.nodes[i-1], track.nodes[i]
-        total = total + #(vector3(a.x, a.y, a.z) - vector3(b.x, b.y, b.z))
+        local b = track:getNodeCoords(i)
+        if not b then break end
+        total = total + #(vector3(prev.x, prev.y, prev.z) - vector3(b.x, b.y, b.z))
         cum[i] = total
+        prev = b
     end
     cumCache[trackIndex] = { cum = cum, total = total }
     return cumCache[trackIndex]
@@ -936,3 +1016,44 @@ exports('getArrivalBoard', function()
     end
     return board
 end)
+
+
+-- why is the phone board empty? print what each stage of getArrivalBoard sees.
+RegisterCommand('boarddebug', function(src)
+    if src ~= 0 then return end
+    print('[boarddebug] trackingTrains = ' .. tostring(#trackingTrains))
+    for trackIndex, names in pairs(STATION_NAMES) do
+        local track = tracks[trackIndex]
+        local nNames = 0
+        for _ in pairs(names) do nNames = nNames + 1 end
+        if not track then
+            print(('[boarddebug] track %s: NOT LOADED (%d names configured)'):format(tostring(trackIndex), nNames))
+        else
+            local hasFn = track.hasStationInformation ~= nil
+            local has   = hasFn and track:hasStationInformation() or false
+            local cnt   = 0
+            if has then
+                local ok, st = pcall(function() return track:getStationInformation() end)
+                if ok and st then cnt = #st end
+            end
+            print(('[boarddebug] track %s: hasFn=%s has=%s stations=%d names=%d')
+                :format(tostring(trackIndex), tostring(hasFn), tostring(has), cnt, nNames))
+        end
+    end
+    -- why are all arrivals empty?
+    for ti = 0, 3 do
+        local c = cumDist(ti)
+        if c then
+            print(('[boarddebug] cumDist(%d): nodes=%d total=%.0f'):format(ti, #c.cum, c.total))
+        end
+    end
+    for i = 1, #trackingTrains do
+        local tr = trackingTrains[i]
+        print(('[boarddebug] train %d: trackIndex=%s currentNode=%s')
+            :format(i, tostring(tr and tr.trackIndex), tostring(tr and tr.currentNode)))
+    end
+    local board = exports['dps-trains']:getArrivalBoard()
+    local withArr = 0
+    for _, e in ipairs(board) do if #e.arrivals > 0 then withArr = withArr + 1 end end
+    print(('[boarddebug] board entries = %d, with arrivals = %d'):format(#board, withArr))
+end, true)

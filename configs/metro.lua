@@ -8,10 +8,10 @@ config.enabled = true
 config.enablePlayerDriving = true
 
 --- How many metrotrains can run at once
-config.count = 2
+config.count = 3
 
 --- Should the metro train have a blip on the map
-config.showTrainBlips = true
+config.showTrainBlips = false  -- DPS: no map blips; the Transit app is the source of truth
 
 --- What blip sprite should be used for the metrotrain
 config.trainBlipSprite = 795
@@ -39,9 +39,14 @@ config.shouldStopAtStations = true
 
 -- This can either be the track node or a rough coordinate to the node
 config.startLocations = {
-    {coords = vec3(282.394, -1194.563, 37.101), direction = true},
-    {coords = vec3(281.678, -1214.649, 37.130), direction = true}
+    -- Both stock spawns sat ~20m apart at Davis, which starts the line bunched.
+    -- These are evenly spaced by node index around track 3 (2244 nodes) via
+    -- /trainspace 3 3, so the subway runs a real headway from the first lap.
+    {coords = vec3(193.196, -603.836, 16.756), direction = true},    -- node 1
+    {coords = vec3(-174.688, -1217.670, 36.550), direction = true},  -- node 749
+    {coords = vec3(-2.146, -1630.470, 28.304), direction = true},    -- node 1497
 }
+
 
 --- Should the Metro have a NPC Driver
 config.spawnNPCDriver = true
