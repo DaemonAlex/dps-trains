@@ -4,11 +4,10 @@ The Del Perro Sands railway: a scheduled passenger service on the heavy-rail
 loop and a metro on the city line, with real station stops, live arrival times
 on the phone, and trains that run to a timetable whether or not anyone is
 watching them.
-
-Forked from [Ehbw-Trains](https://github.com/Ehbw) and substantially rewritten.
-Credit to the upstream author for the track-node architecture and train
-tracking that everything here is built on.
-
+Credit: Walter (https://www.gta5-mods.com/vehicles/overhauled-trains-lore-friendly-liveries)
+Credit: Forked (https://github.com/Ehbw) and substantially rewritten and polsished. With input from several past train scripts 
+Credit: to the upstream author (https://github.com/VenomXNL/XNL-FiveM-Trains-U3)  for the track-node architecture and traintracking that everything here is              built on.
+Credit: Big Daddy Scripts for the open Source work on Walters trains :-)
 ## Service
 
 | | |
