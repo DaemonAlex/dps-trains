@@ -375,7 +375,11 @@ AddStateBagChangeHandler("trainSpeed", nil, function(bagName, _, value)
     value = value or 0
     lib.print.debug(("Setting train (%i) speed to %.3f"):format(train, value))
     SetTrainCruiseSpeed(train, value)
-    --SetTrainSpeed(train, value)
+    -- SetTrainSpeed re-enabled. Cruise speed is a TARGET the train drifts
+    -- toward; on its own, "stop" meant "coast down eventually", so trains slid
+    -- past platforms - worse now that line speed is 30 m/s. Setting both makes
+    -- the command take effect immediately while cruise keeps it there.
+    SetTrainSpeed(train, value)
 end)
 
 AddStateBagChangeHandler("trainState", nil, function(bagName, _, value, _, replicated)
