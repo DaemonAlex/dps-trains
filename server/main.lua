@@ -284,14 +284,39 @@ local function iterateTrains()
     -- State is held in a local table, NOT on train.private - that is a protected
     -- ox_lib class field and rejects new keys ("cannot set value of private
     -- field").
-    local STUCK_AFTER_MS = 45000
+    local STUCK_AFTER_MS = 120000  -- generous: a real strand sits forever, so there is no hurry
     local nowMs = GetGameTimer()
     for i = 1, #trackingTrains do
         local tr = trackingTrains[i]
         if tr and tr.id then
             local held = (tr.private and tr.private.dwellUntil) or headwayState[tr.id]
                          or physHoldState[tr.id]
-            if tr.handle and tr.currentNode and not held and not tr.isPlayerDriven then
+            -- A train legitimately standing at a platform has not "advanced"
+            -- either, and it does not always carry dwellUntil - the ghost dwell
+            -- happens before it materialises, so the handover can leave it
+            -- stopped at a station with no flag set. Culling those deleted a
+            -- train a player was about to board. Anything near a station node is
+            -- therefore exempt, and the deadline is generous enough that a real
+            -- strand still gets caught.
+            -- Read stations from the track itself. STATION_NAMES is declared
+            -- further down this file, so referencing it here resolves to a nil
+            -- global.
+            local nearStation = false
+            local trk = tracks[tr.trackIndex]
+            if trk and tr.currentNode and trk.hasStationInformation and trk:hasStationInformation() then
+                local okS, info = pcall(function() return trk:getStationInformation() end)
+                if okS and info then
+                    for si = 1, #info do
+                        local sn = info[si] and info[si].node
+                        if sn and math.abs(tr.currentNode - sn) <= 40 then
+                            nearStation = true
+                            break
+                        end
+                    end
+                end
+            end
+
+            if tr.handle and tr.currentNode and not held and not tr.isPlayerDriven and not nearStation then
                 local rec = stuckWatch[tr.id]
                 if not rec or rec.node ~= tr.currentNode then
                     stuckWatch[tr.id] = { node = tr.currentNode, since = nowMs }

@@ -7,7 +7,7 @@ config.enabled = true
 config.enablePlayerDriving = true
 
 --- The freight trains
-config.count = 3
+config.count = 6
 
 --- Should Freight trains have a blip on the map
 config.showTrainBlips = false  -- DPS: no map blips; the Transit app is the source of truth
@@ -48,24 +48,36 @@ config.trainBlipName = "Train"
 config.shouldStopAtStations = true
 
 config.startLocations = {
-    -- 3 passenger trains, no freight. Every train now behaves identically:
-    -- all stop, all open doors. The freight consist stopped but never opened
-    -- doors, which reads as broken to a player who does not know why.
+    -- 6 passenger trains, alternating the two consists. No freight - every
+    -- train stops and opens doors.
     --
-    -- Positions are given as NODE indices, not coordinates. CTrain derives
-    -- currentCoords from the node (self.currentCoords = track:getNodeCoords),
-    -- so this is exact - no picking points off a map and hoping. Track 0 has
-    -- 4226 nodes, so even thirds are 1 / 1410 / 2819.
+    -- Positions are NODE indices, not coordinates: CTrain derives currentCoords
+    -- from the node, so spacing is exact. Track 0 has 4226 nodes, so even
+    -- sixths are 704 apart.
     --
-    -- Spacing matters because station stops only happen for MATERIALISED trains
-    -- (the logic lives inside `if self.handle`), so a train near a player loses
-    -- dwell time that ghost trains elsewhere do not. 3 trains gives a 7 min
-    -- headway against ~200s worst-case drift per lap at a 30s dwell - a wide
-    -- enough margin that the dwell regulation can hold it.
+    -- Headway:
+    --     running        29,680 m at 30 m/s = 16.5 min
+    --     10 stops @30s                     =  5.0 min
+    --     effective loop                    = 21.5 min
+    --     / 6 trains                        = ~3.6 min between trains
+    --
+    -- Six is safe against bunching because ghost trains now observe station
+    -- dwells (server/CTrain.lua). Previously the station cycle lived inside
+    -- `if self.handle`, so ghosts skipped every platform AND ran at one node
+    -- per tick (~7 m/s) against a materialised train's 30 - a 4x speed gap plus
+    -- unequal stops, which made trains catch each other no matter the spacing.
+    -- With both fixed, every train loses identical time and drift is
+    -- second-order. 704 nodes of spacing against a 40-node headway trigger
+    -- leaves 664 nodes of margin.
     {node = 1,    direction = true, variation = 28, doors = true},   -- Axsellya Express
-    {node = 1410, direction = true, variation = 29, doors = true},   -- Brown Streak
-    {node = 2819, direction = true, variation = 28, doors = true},   -- Axsellya Express
+    {node = 705,  direction = true, variation = 29, doors = true},   -- Brown Streak
+    {node = 1409, direction = true, variation = 28, doors = true},   -- Axsellya Express
+    {node = 2113, direction = true, variation = 29, doors = true},   -- Brown Streak
+    {node = 2817, direction = true, variation = 28, doors = true},   -- Axsellya Express
+    {node = 3521, direction = true, variation = 29, doors = true},   -- Brown Streak
 }
+
+
 
 
 
