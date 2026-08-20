@@ -374,12 +374,17 @@ AddStateBagChangeHandler("trainSpeed", nil, function(bagName, _, value)
 
     value = value or 0
     lib.print.debug(("Setting train (%i) speed to %.3f"):format(train, value))
+    -- Cruise speed ONLY. SetTrainSpeed forces velocity instantly, which makes a
+    -- train leap from standstill to line speed on departure and slam to the new
+    -- value when slowing - no acceleration curve in either direction. That is
+    -- presumably why it was commented out originally, and re-enabling it was a
+    -- mistake.
+    --
+    -- Cruise alone means the engine accelerates and decelerates naturally. The
+    -- cost is that "stop" is a target rather than a command, so the braking in
+    -- server/CTrain.lua starts far enough out to shed 30 m/s gradually instead
+    -- of asking for a stop 180m from the platform and hoping.
     SetTrainCruiseSpeed(train, value)
-    -- SetTrainSpeed re-enabled. Cruise speed is a TARGET the train drifts
-    -- toward; on its own, "stop" meant "coast down eventually", so trains slid
-    -- past platforms - worse now that line speed is 30 m/s. Setting both makes
-    -- the command take effect immediately while cruise keeps it there.
-    SetTrainSpeed(train, value)
 end)
 
 AddStateBagChangeHandler("trainState", nil, function(bagName, _, value, _, replicated)

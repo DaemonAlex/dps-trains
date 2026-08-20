@@ -753,7 +753,32 @@ function Train:Update(time)
 
             -- 22m window: the server samples position coarsely and a fast train
             -- can step OVER a narrow trigger between updates (observed blow-through)
-            if distanceToStation <= 22.0 then
+            -- Trigger on the station NODE as well as the distance.
+            --
+            -- Empirically no materialised train has ever set dwell, while ghosts
+            -- stop reliably - and the ghost path keys off the node number rather
+            -- than a straight-line distance. A materialised train's node comes
+            -- from getClosestTrackNodeWithinRange against its real position, so
+            -- rounding, carriage offset and where the entity actually sits
+            -- relative to the node can all keep the measured distance above 22m
+            -- through the entire approach. Observed at both Lumber Mill and
+            -- Paleto Bay: correct braking to ~5 m/s, then straight through with
+            -- dwell=nil.
+            --
+            -- Matching the node is exact and cannot be missed by a metre or two.
+            local atStationNode = false
+            local okN, sInfo = pcall(function() return self.track:getStationInformation() end)
+            if okN and sInfo then
+                for si = 1, #sInfo do
+                    local sn = sInfo[si] and sInfo[si].node
+                    if sn and math.abs(self.currentNode - sn) <= 2 then
+                        atStationNode = true
+                        break
+                    end
+                end
+            end
+
+            if distanceToStation <= 22.0 or atStationNode then
                 if not self.private.servedStation then
                     self.private.servedStation = stationIndex
                     self.private.approachSlow = nil
@@ -783,16 +808,36 @@ function Train:Update(time)
             -- server-side for client-created trains, so relying on the game's
             -- own station slow-down let trains hit the stop window at full
             -- cruise and glide far past the platform. Crawl from 180m out.
+            -- Staged braking. One step to 4 m/s at 180m was written when line
+            -- speed was 11 m/s; at 30 m/s that is six seconds of warning, and
+            -- since the client only sets a CRUISE target the train cannot shed
+            -- that much speed in time - it sails through the platform.
+            --
+            -- Stepping the target down over half a kilometre lets the engine
+            -- decelerate on its own curve, which both stops the train and looks
+            -- like a train slowing rather than snapping to a new speed.
             if state and not self.private.servedStation then
-                if distanceToStation <= 180.0 and not self.private.approachSlow then
+                local want
+                if distanceToStation <= 60.0 then
+                    want = 3.0
+                elseif distanceToStation <= 150.0 then
+                    want = 8.0
+                elseif distanceToStation <= 300.0 then
+                    want = 15.0
+                elseif distanceToStation <= 500.0 then
+                    want = 22.0
+                end
+
+                if want and self.private.appliedZoneSpeed ~= want then
                     self.private.approachSlow = true
-                    state:set("trainSpeed", 4.0, true)
-                    lib.print.debug(("Train %i braking for station %i"):format(self.id, stationIndex))
+                    self.private.appliedZoneSpeed = want
+                    state:set("trainSpeed", want, true)
+                    lib.print.debug(("Train %i braking to %.0f for station %i"):format(self.id, want, stationIndex))
                 end
             end
             -- recovery: if we somehow got past the station without stopping,
             -- do not crawl forever - restore speed once the next stop is far
-            if self.private.approachSlow and self.private.servedStation == nil and distanceToStation > 300.0 then
+            if self.private.approachSlow and self.private.servedStation == nil and distanceToStation > 600.0 then
                 self.private.approachSlow = nil
                 local resumeSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
                 if state then state:set("trainSpeed", resumeSpeed, true) end

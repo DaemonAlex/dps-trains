@@ -20,6 +20,8 @@ config.trainModels = {
     `streakc`,
     `streakcab`,
     `streakcoaster`,
+    `streakcoasterc`,
+    `streakcoastercab`,
     `metrotrain`,
 }
 
