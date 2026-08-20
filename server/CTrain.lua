@@ -5,11 +5,23 @@
 -- Open country runs near the cap; the urban corridor slows down.
 -- Node ranges from data/tracks-0.lua geography.
 -- ============================================
+-- Last time each train's ghost position was advanced, keyed by train id.
+-- Not on train.private: that is a protected class field.
+local ghostStepClock = {}
+-- Ghost station dwells: when a ghost is holding at a platform, and which
+-- station it last served so it does not re-trigger on the same one.
+local ghostDwellUntil = {}
+local ghostServed = {}
+
+
 local SPEED_ZONES = {
-    [0] = {
-        { from = 2150, to = 3350, speed = 16.0, name = 'city corridor' },
-        -- everything else on track 0 runs the open-country speed below
-    },
+    -- Deliberately empty: one speed line-wide.
+    -- The city corridor used to run at 16 m/s (36 mph), which is painfully slow
+    -- in a passenger train. Zones also depend on changing speed mid-run, and the
+    -- client's SetTrainSpeed is commented out so those changes may never apply -
+    -- making zones the feature most exposed to the one mechanism known to be
+    -- broken. Add ranges back here if per-area speeds are ever wanted.
+    [0] = {},
 }
 local OPEN_SPEED = 28.0
 
@@ -117,9 +129,30 @@ function Train:constructor(data)
         self:CreateEntity()
     end
 
-    if self.hasTrainBlip then
-        TriggerClientEvent("Ehbw-Trains:registerTrainInfo", -1, self:GetClientInfo())
-    end
+    -- Sent unconditionally. This is metadata (id, type, variation), NOT a blip.
+    -- It is the only thing that populates the client's trains[] table, which the
+    -- client needs to associate the entity, apply the ignoreObstructions flag,
+    -- and fire Ehbw-Trains:trainEnteredScope that other resources hook.
+    --
+    -- Gating it on hasTrainBlip meant that turning moving-train blips off - which
+    -- DPS does deliberately, the Transit app being the source of truth - stopped
+    -- clients being told trains exist at all. The symptom is a client warning
+    -- "Invalid train state" every time a train's state bag updates, because
+    -- trains[id] is nil and the handler bails before assigning .entity.
+    --
+    -- Blip DRAWING is separately driven by Ehbw-Trains:updBlipCoords, which the
+    -- server still only sends when config.general.showTrainBlips is true, so no
+    -- blips come back from this.
+    TriggerClientEvent("Ehbw-Trains:registerTrainInfo", -1, self:GetClientInfo())
+end
+
+---Set (or clear) the station dwell deadline.
+---Exists because private fields are only writable from inside the class; the
+---dwell regulation in server/main.lua needs to extend or shorten a dwell and
+---cannot touch self.private directly.
+---@param value number?
+function Train:SetDwellUntil(value)
+    self.private.dwellUntil = value
 end
 
 function Train:GetClientInfo()
@@ -482,7 +515,9 @@ function Train:GetTrackNodeFromWorldPos(coords)
     return self.track:getClosestTrackNodeWithinRange(self.currentCoords, self.currentNode, self.direction)
 end
 
-function Train:UpdatePosition()
+---Advance one node in the current direction, handling wrap / ping-pong.
+---@return boolean moved
+function Train:StepNode()
     local currentIndex
     if self.direction then
         currentIndex = self.currentNode + 1
@@ -510,8 +545,85 @@ function Train:UpdatePosition()
 
     self.currentNode = currentIndex
     self.currentCoords = self.track:getNodeCoords(currentIndex)
+    return true
+end
 
-    currentIndex = nil
+function Train:UpdatePosition()
+    -- Advance by the distance actually covered since the last update, not by a
+    -- fixed one node per call.
+    --
+    -- iterateTrains runs on SetInterval(..., 1000), so one-node-per-call made a
+    -- GHOST train travel one node per second - roughly 7 m/s on track 0, whose
+    -- 4226 nodes span 29,680 m. Meanwhile a MATERIALISED train is driven by the
+    -- game engine at config speed (30 m/s). The same service therefore ran four
+    -- times faster whenever somebody was watching it, which:
+    --   * made arrivals miss the board's estimate by minutes,
+    --   * guaranteed ghost and materialised trains drift apart, and
+    --   * meant config.speed had no effect at all on most trains most of the time.
+    --
+    -- Node spacing is not uniform, so this consumes a metre budget node by node
+    -- rather than assuming an average length.
+    local now = GetGameTimer()
+    local prevAt = ghostStepClock[self.id]
+    local dt = prevAt and ((now - prevAt) / 1000.0) or 1.0
+    -- clamp: a resource restart or a long hitch must not teleport a train
+    if dt <= 0.0 or dt > 5.0 then dt = 1.0 end
+    ghostStepClock[self.id] = now
+
+    -- Ghosts observe station stops too.
+    --
+    -- The whole station cycle lives inside `if self.handle`, so a ghost used to
+    -- sail through every platform. Two consequences: a train materialising near
+    -- a waiting player had already passed the station node (observed: built at
+    -- node 4191, Sandy is 4159), and ghosts never lost the dwell time that
+    -- materialised trains do, so the fleet drifted apart.
+    --
+    -- Holding the ghost means the train is ALREADY stopped when it comes into
+    -- scope, instead of having ~14s at 30 m/s to brake from 424m out.
+    if ghostDwellUntil[self.id] then
+        if now < ghostDwellUntil[self.id] then
+            return                                  -- still standing at the platform
+        end
+        ghostDwellUntil[self.id] = nil
+    end
+
+    local stationNodes
+    if self.stopsAtStation and self.track.hasStationInformation and self.track:hasStationInformation() then
+        local ok, info = pcall(function() return self.track:getStationInformation() end)
+        if ok and info then
+            stationNodes = {}
+            for i = 1, #info do
+                if info[i] and info[i].node then stationNodes[info[i].node] = i end
+            end
+        end
+    end
+
+    local budget = (self.speed or 10.0) * dt
+    local guard = 0
+
+    repeat
+        local prev = self.currentCoords
+        self:StepNode()
+        guard = guard + 1
+
+        -- Checked per step rather than by distance: a ghost covers ~30m per
+        -- tick, which can straddle a 22m trigger window entirely.
+        if stationNodes then
+            local hit = stationNodes[self.currentNode]
+            if hit and ghostServed[self.id] ~= self.currentNode then
+                ghostServed[self.id] = self.currentNode
+                ghostDwellUntil[self.id] = now + (config.general.stationDwellTime or 30000)
+                return
+            end
+        end
+
+        if prev and self.currentCoords then
+            budget = budget - #(vector3(prev.x, prev.y, prev.z)
+                              - vector3(self.currentCoords.x, self.currentCoords.y, self.currentCoords.z))
+        else
+            break
+        end
+    until budget <= 0.0 or guard >= 60
 end
 
 

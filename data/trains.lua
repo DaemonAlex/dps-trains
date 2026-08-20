@@ -1,131 +1,40 @@
+-- Generated from dps-trains-stock/data/trains.xml.
+-- index is the ABSOLUTE variation number the game uses: TRAINCONFIGS_FILE
+-- appends after the 28 vanilla configs, so these are 28+.
+-- client/main.lua reads variations[data.variation], so if these indices do
+-- not match, every lookup misses and it falls back to loading EVERY model
+-- in config.trainModels - which stalls creation on any model not streamed.
 return {
   {
-   index = 0,
+   index = 28,   -- passenger_config01
    models = {
     `streakcoaster`,
     `streakc`,
    },
   },
   {
-   index = 1,
+   index = 29,   -- passenger_config02
    models = {
-    `streakcoaster`,
+    `streak`,
     `streakc`,
+    `streakcab`,
    },
   },
   {
-   index = 2,
+   index = 30,   -- freight_config01
    models = {
     `sd70mac`,
-    `freightcaboose`,
-    `freightboxlarge`,
-    `freightcont`,
-   },
-  },
-  {
-   index = 3,
-   models = {
-    `sd70mac`,
-    `freightboxlarge`,
-   },
-  },
-  {
-   index = 4,
-   models = {
-    `sd70mac`,
-    `freightcont`,
-   },
-  },
-  {
-   index = 5,
-   models = {
-    `sd70mac`,
-    `freightcont`,
     `freightflat`,
-   },
-  },
-  {
-   index = 6,
-   models = {
-    `sd70mac`,
-    `freighttankbulk`,
-    `freighttanklong`,
-   },
-  },
-  {
-   index = 7,
-   models = {
-    `sd70mac`,
-    `freighttanklong`,
-   },
-  },
-  {
-   index = 8,
-   models = {
-    `sd70mac`,
-    `freightflattank`,
-   },
-  },
-  {
-   index = 9,
-   models = {
-    `sd70mac`,
-    `freightcoal`,
-   },
-  },
-  {
-   index = 10,
-   models = {
-    `sd70mac`,
     `freightflatlogs`,
-   },
-  },
-  {
-   index = 11,
-   models = {
-    `sd70mac`,
-    `freightbeam`,
-    `freightcont`,
-    `freightbeamc`,
-   },
-  },
-  {
-   index = 12,
-   models = {
-    `sd70mac`,
-    `freightcont`,
-    `freightstack`,
-   },
-  },
-  {
-   index = 13,
-   models = {
-    `sd70mac`,
+    `freighttanklong`,
     `freightgondola`,
-    `freighthopper`,
-    `freightgraincar`,
-   },
-  },
-  {
-   index = 14,
-   models = {
-    `sd70mac`,
     `freightcaboose`,
-    `freightbox`,
-    `foxbox`,
    },
   },
   {
-   index = 15,
-   models = {
-    `sd70mac`,
-    `freightrack`,
-   },
-  },
-  {
-   index = 16,
+   index = 31,   -- metro_config01
    models = {
     `metrotrain`,
    },
-  }
+  },
 }

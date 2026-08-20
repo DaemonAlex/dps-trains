@@ -375,7 +375,11 @@ AddStateBagChangeHandler("trainSpeed", nil, function(bagName, _, value)
     value = value or 0
     lib.print.debug(("Setting train (%i) speed to %.3f"):format(train, value))
     SetTrainCruiseSpeed(train, value)
-    --SetTrainSpeed(train, value)
+    -- SetTrainSpeed re-enabled. Cruise speed is a TARGET the train drifts
+    -- toward; on its own, "stop" meant "coast down eventually", so trains slid
+    -- past platforms - worse now that line speed is 30 m/s. Setting both makes
+    -- the command take effect immediately while cruise keeps it there.
+    SetTrainSpeed(train, value)
 end)
 
 AddStateBagChangeHandler("trainState", nil, function(bagName, _, value, _, replicated)
@@ -511,7 +515,12 @@ CreateThread(function()
                 goto skip
             end
 
-            variations[index] = train.models
+            -- Use the index the data file declares, not a running counter.
+            -- These are absolute game variation numbers (28+ for appended
+            -- configs); a 0-based counter never matches data.variation, so the
+            -- lookup always missed and requestTrainModels fell back to loading
+            -- every model in config.trainModels.
+            variations[train.index or index] = train.models
             index += 1
             ::skip::
         end
@@ -1022,3 +1031,51 @@ end
 
 handleBridgeSupport()
 TriggerServerEvent("Ehbw-Trains:registerCandidacy")
+
+-- Delete this resource's trains when it stops.
+--
+-- Without this, every restart of dps-trains leaves its train entities in the
+-- world. The server forgets them, but the entities keep running - and the rogue
+-- sweep below will not touch them either, because it only culls trains MISSING
+-- the e_trn state bag and an orphan still carries the bag from before the
+-- restart. The result is untracked trains that ignore speed zones and never
+-- stop at stations, because nothing is left to command them.
+--
+-- GTA trains are notoriously persistent, so cleaning up on stop is the only
+-- reliable moment to do it.
+AddEventHandler('onResourceStop', function(resource)
+    if resource ~= GetCurrentResourceName() then return end
+
+    for _, data in pairs(trains) do
+        if data and data.entity and DoesEntityExist(data.entity) then
+            local carriage = data.entity
+            local guard = 0
+            while carriage and carriage ~= 0 and DoesEntityExist(carriage) and guard < 32 do
+                local nextCarriage = GetTrainCarriage(data.entity, guard + 1)
+                SetEntityAsMissionEntity(carriage, true, true)
+                DeleteEntity(carriage)
+                carriage = nextCarriage
+                guard = guard + 1
+            end
+        end
+        if data and data.blip and DoesBlipExist(data.blip) then RemoveBlip(data.blip) end
+        if data and data.entityBlip and DoesBlipExist(data.entityBlip) then RemoveBlip(data.entityBlip) end
+    end
+
+    -- Belt and braces: any train-type vehicle still around.
+    -- Build the protected set here rather than reusing the `protectedModels`
+    -- upvalue - that local is scoped to an inner block and is not visible at
+    -- file scope, so referencing it here resolves to a nil global.
+    local protected = {}
+    for _, h in ipairs((config and config.general and config.general.protectedTrainModels) or {}) do
+        protected[h] = true
+    end
+
+    for _, ent in ipairs(GetGamePool('CVehicle')) do
+        if DoesEntityExist(ent) and GetVehicleTypeRaw(ent) == 14
+           and not protected[GetEntityModel(ent)] then
+            SetEntityAsMissionEntity(ent, true, true)
+            DeleteEntity(ent)
+        end
+    end
+end)
