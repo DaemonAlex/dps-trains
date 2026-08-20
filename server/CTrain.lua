@@ -774,7 +774,13 @@ function Train:Update(time)
                 local skip = (config.general.skipStations or {})[self.trackIndex] or {}
                 for si = 1, #sInfo do
                     local sn = sInfo[si] and sInfo[si].node
-                    if sn and not skip[sn] and math.abs(self.currentNode - sn) <= 2 then
+                    -- Fire only on the APPROACH side, never past the platform.
+                    -- math.abs() triggered either side, so a train tripping it a
+                    -- few nodes late stopped ~35m beyond the stop. This way the
+                    -- worst case is stopping slightly short, which reads far
+                    -- better than overshooting.
+                    local ahead = sn - self.currentNode
+                    if sn and not skip[sn] and ahead >= 0 and ahead <= 5 then
                         atStationNode = true
                         break
                     end

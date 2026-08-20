@@ -1044,9 +1044,9 @@ local STATION_NAMES = {
         [1481] = 'Quarry (Southbound)',
         [1555] = 'Wind Farm',                 -- skipped, see config.skipStations
         [1701] = 'Power Plant',
-        [2434] = 'Downtown (Southbound)',
+        [2434] = 'Davis Interchange (Southbound)',   -- ~400m to the metro's Davis platform
         [2667] = 'Port Depot',
-        [2865] = 'Downtown (Northbound)',
+        [2865] = 'Davis Interchange (Northbound)',   -- ~400m to the metro's Davis platform
         [3891] = 'Quarry (Northbound)',
         [4159] = 'Sandy Shores',
     },
