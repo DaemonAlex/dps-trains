@@ -153,6 +153,17 @@ config.showTrainBlips = false  -- DPS: map decluttered; station blips (short-ran
 --     10s dwell ->  1.7 min
 -- At 1.7 min the dwell regulation in server/main.lua can actually correct the
 -- drift; at 10 min it never could.
+--- Station nodes trains should NOT call at, keyed by track index.
+--- Stations come from the game's track data and cannot be removed, only
+--- ignored - both by the stop logic and by the arrival board.
+--- Track 0: Quarry (1481) and Wind Farm (1555) sit 520m apart, so with braking
+--- starting 500m out a train decelerates across the entire gap and never gets
+--- up to speed between them. Quarry is kept; it is also served on the return
+--- leg at node 3891.
+config.skipStations = {
+    [0] = { [1555] = true },   -- Wind Farm
+}
+
 config.stationDwellTime = 30000
 
 --- The sprite for the train blip

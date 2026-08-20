@@ -1032,9 +1032,22 @@ end)
 -- ============================================
 local STATION_NAMES = {
     [0] = {  -- main line, keyed by stop node
-        [462] = 'Lumber Mill', [651] = 'Paleto Bay', [1481] = 'Quarry',
-        [1555] = 'Wind Farm', [1701] = 'Power Plant', [2434] = 'Downtown',
-        [2667] = 'Port Depot', [2865] = 'Downtown', [3891] = 'Quarry',
+        -- Downtown and Quarry each appear TWICE because the line calls at them
+        -- in both directions, not because they are duplicates. Measured from
+        -- live train positions:
+        --   Downtown 2434 (680,-1236) running south, 2865 (664,-988) north
+        --   Quarry   1481 (2552,2846) running south-west, 3891 (2496,2786) north-east
+        -- Roughly 250m apart at Downtown and 50m at Quarry - the same station,
+        -- opposite platforms. Naming them by direction tells a passenger which
+        -- way the train is going; east/west would be meaningless here.
+        [462] = 'Lumber Mill', [651] = 'Paleto Bay',
+        [1481] = 'Quarry (Southbound)',
+        [1555] = 'Wind Farm',                 -- skipped, see config.skipStations
+        [1701] = 'Power Plant',
+        [2434] = 'Downtown (Southbound)',
+        [2667] = 'Port Depot',
+        [2865] = 'Downtown (Northbound)',
+        [3891] = 'Quarry (Northbound)',
         [4159] = 'Sandy Shores',
     },
     [3] = {
@@ -1097,7 +1110,9 @@ exports('getArrivalBoard', function()
         if track and track.hasStationInformation and track:hasStationInformation() then
             local ok, stations = pcall(function() return track:getStationInformation() end)
             if ok and stations then
+                local skipB = (config.general.skipStations or {})[trackIndex] or {}
                 for si, st in ipairs(stations) do
+                    if skipB[st.node] then goto nextStation end
                     local entry = {
                         station = names[st.node] or ('Stop ' .. si),
                         node = st.node,
@@ -1140,6 +1155,7 @@ exports('getArrivalBoard', function()
                     end
                     table.sort(entry.arrivals, function(a, b) return a.eta < b.eta end)
                     board[#board + 1] = entry
+                    ::nextStation::
                 end
             end
         end

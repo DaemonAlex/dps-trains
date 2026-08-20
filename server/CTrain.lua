@@ -592,8 +592,10 @@ function Train:UpdatePosition()
         local ok, info = pcall(function() return self.track:getStationInformation() end)
         if ok and info then
             stationNodes = {}
+            local skip = (config.general.skipStations or {})[self.trackIndex] or {}
             for i = 1, #info do
-                if info[i] and info[i].node then stationNodes[info[i].node] = i end
+                local sn = info[i] and info[i].node
+                if sn and not skip[sn] then stationNodes[sn] = i end
             end
         end
     end
@@ -769,9 +771,10 @@ function Train:Update(time)
             local atStationNode = false
             local okN, sInfo = pcall(function() return self.track:getStationInformation() end)
             if okN and sInfo then
+                local skip = (config.general.skipStations or {})[self.trackIndex] or {}
                 for si = 1, #sInfo do
                     local sn = sInfo[si] and sInfo[si].node
-                    if sn and math.abs(self.currentNode - sn) <= 2 then
+                    if sn and not skip[sn] and math.abs(self.currentNode - sn) <= 2 then
                         atStationNode = true
                         break
                     end

@@ -1,15 +1,18 @@
 -- Generated from dps-trains-stock/data/trains.xml.
--- index is the ABSOLUTE variation number the game uses: TRAINCONFIGS_FILE
--- appends after the 28 vanilla configs, so these are 28+.
--- client/main.lua reads variations[data.variation], so if these indices do
--- not match, every lookup misses and it falls back to loading EVERY model
--- in config.trainModels - which stalls creation on any model not streamed.
+-- index is the ABSOLUTE variation number: TRAINCONFIGS_FILE appends after
+-- the 28 vanilla configs, so these start at 28.
+--
+-- REGENERATE THIS WHENEVER A CONSIST CHANGES. client/main.lua preloads
+-- exactly these models per variation; if the list is stale the client
+-- loads the wrong stock and CREATE_MISSION_TRAIN fails with
+-- "carriage hash '...' is not loaded".
 return {
   {
    index = 28,   -- passenger_config01
    models = {
     `streakcoaster`,
-    `streakc`,
+    `streakcoasterc`,
+    `streakcoastercab`,
    },
   },
   {
