@@ -69,7 +69,7 @@ config.startLocations = {
     -- With both fixed, every train loses identical time and drift is
     -- second-order. 704 nodes of spacing against a 40-node headway trigger
     -- leaves 664 nodes of margin.
-    {node = 1,    direction = true, variation = 28, doors = true},   -- Axsellya Express
+    {node = 1,    direction = true, variation = 28, doors = true},   -- Axsellya Express   -- Axsellya Express
     {node = 705,  direction = true, variation = 29, doors = true},   -- Brown Streak
     {node = 1409, direction = true, variation = 28, doors = true},   -- Axsellya Express
     {node = 2113, direction = true, variation = 29, doors = true},   -- Brown Streak

@@ -374,12 +374,25 @@ AddStateBagChangeHandler("trainSpeed", nil, function(bagName, _, value)
 
     value = value or 0
     lib.print.debug(("Setting train (%i) speed to %.3f"):format(train, value))
+    -- Cruise speed for everything, forced velocity for a full stop only.
+    --
+    -- SetTrainCruiseSpeed sets a TARGET the engine works toward, which gives
+    -- natural acceleration and braking. But a target of zero does not stop a
+    -- train that is already rolling: the server would register the station stop,
+    -- set its dwell, and the train would drive straight through the platform
+    -- while the server believed it was standing there. Confirmed by trace -
+    -- served=4159 while the node kept climbing 4150, 4152, 4154, 4158.
+    --
+    -- SetTrainSpeed forces velocity immediately. Applied to EVERY change it made
+    -- trains leap off the mark and slam to lower speeds, which is why it was
+    -- commented out originally. Applied only to a commanded stop it is
+    -- imperceptible, because the staged braking curve in server/CTrain.lua has
+    -- already brought the train down to ~3 m/s before zero is ever requested.
     SetTrainCruiseSpeed(train, value)
-    -- SetTrainSpeed re-enabled. Cruise speed is a TARGET the train drifts
-    -- toward; on its own, "stop" meant "coast down eventually", so trains slid
-    -- past platforms - worse now that line speed is 30 m/s. Setting both makes
-    -- the command take effect immediately while cruise keeps it there.
-    SetTrainSpeed(train, value)
+
+    if value <= 0.5 then
+        SetTrainSpeed(train, 0.0)
+    end
 end)
 
 AddStateBagChangeHandler("trainState", nil, function(bagName, _, value, _, replicated)

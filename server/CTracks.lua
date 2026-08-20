@@ -142,17 +142,35 @@ function Tracks:getClosestTrackNode(coords)
 end
 
 function Tracks:getClosestTrackNodeWithinRange(coords, currentNode, direction)
-    -- We can just take the last node and check the next 100 nodes in front or behind (since due to interpolation issues trains can't go backwards without issues)
-    local trackNode = currentNode
-    local limit = math.min(currentNode + 100, self.numNodes)
+    -- Search a 100-node window ahead of the train, WRAPPING past the final node.
+    --
+    -- This used to clamp with math.min(currentNode + 100, self.numNodes), so on
+    -- the last node of a track the loop ran exactly once - over the node the
+    -- train was already on - and could never reach node 1. A materialised train
+    -- is positioned by the game engine and the server derives its node from the
+    -- real coordinates through this function, so once a train passed the final
+    -- node its reported position froze there permanently while the train itself
+    -- carried on down the line.
+    --
+    -- Everything downstream reads currentNode: station stops, arrival times, and
+    -- the stuck detector - which saw a number that never changed, declared the
+    -- train stranded and culled it, dumping its passenger out mid-route.
+    -- Observed: train 8 pinned at node 4226 while its coordinates travelled from
+    -- (520, 3190) to (-546, 4968).
+    local n = self.numNodes
     local minCoords = math.huge
     local node = -1
 
-    for i = trackNode, limit do
-        local dist = #(self.private.nodes[i] - coords)
-        if dist < minCoords then
-            minCoords = dist
-            node = i
+    for step = 0, 100 do
+        local i = currentNode + step
+        if i > n then i = i - n end          -- wrap around the end of the loop
+        local p = (i >= 1 and i <= n) and self.private.nodes[i] or nil
+        if p then
+            local dist = #(p - coords)
+            if dist < minCoords then
+                minCoords = dist
+                node = i
+            end
         end
     end
 

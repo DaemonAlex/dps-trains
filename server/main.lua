@@ -332,52 +332,22 @@ local function iterateTrains()
         end
     end
 
-    -- DPS physical separation.
+    -- Physical separation check REMOVED.
     --
-    -- The headway hold above compares TRACK SEQUENCE only. Track 0 folds back on
-    -- itself, so two trains can sit 44 m apart on the ground while being ~1,300
-    -- nodes apart in the node list. The node check sees a huge gap, concludes
-    -- there is no conflict, and the trains drive straight through each other -
-    -- observed from inside one of them.
+    -- It held a train whenever another was within 60m on the ground, to stop
+    -- trains driving through each other. But track 0 folds back on itself, so
+    -- services legitimately pass on parallel rails 40-60m apart - and the check
+    -- cannot tell a parallel pass from a head-on one. The result was a train
+    -- stopping dead every time it met another going the other way.
     --
-    -- So also compare real distance. Only ONE train of a conflicting pair is
-    -- ever held (the higher id, chosen deterministically) - holding both would
-    -- deadlock two trains meeting on a fold-back with neither able to clear.
-    -- Separate hold/clear thresholds give hysteresis so a pair sitting near the
-    -- boundary cannot oscillate between held and released every tick.
-    local PHYS_HOLD  = 60.0
-    local PHYS_CLEAR = 95.0
-
-    for i = 1, #trackingTrains do
-        local a = trackingTrains[i]
-        if a and a.currentCoords and a.private and not a.private.dwellUntil and not headwayState[a.id] then
-            local conflict = false
-            for j = 1, #trackingTrains do
-                local b = trackingTrains[j]
-                if b and b ~= a and b.currentCoords and b.id < a.id then
-                    local d = #(vector3(a.currentCoords.x, a.currentCoords.y, a.currentCoords.z)
-                             -  vector3(b.currentCoords.x, b.currentCoords.y, b.currentCoords.z))
-                    local limit = physHoldState[a.id] and PHYS_CLEAR or PHYS_HOLD
-                    if d < limit then
-                        conflict = true
-                        break
-                    end
-                end
-            end
-
-            local state = a.getState and a:getState()
-            if conflict and not physHoldState[a.id] then
-                physHoldState[a.id] = true
-                if state then state:set("trainSpeed", 0.0, true) end
-                lib.print.debug(("Train %i holding: another train is physically alongside"):format(a.id))
-            elseif not conflict and physHoldState[a.id] then
-                physHoldState[a.id] = nil
-                local resumeSpeed = DPS_ZoneSpeed and DPS_ZoneSpeed(a.trackIndex, a.currentNode, a.speed) or a.speed
-                if state then state:set("trainSpeed", resumeSpeed, true) end
-                lib.print.debug(("Train %i resuming, physically clear"):format(a.id))
-            end
-        end
-    end
+    -- The pass-through it was written for turned out to be a different bug: a
+    -- train stranded at node 4226 that the server had lost track of, because
+    -- getClosestTrackNodeWithinRange could not wrap past the final node. That is
+    -- fixed at source, along with orphan cleanup on resource stop, so this
+    -- workaround is not needed.
+    --
+    -- Same-direction following is still covered by the node-based headway hold
+    -- above, which is the real collision risk.
 
     -- DPS schedule regulation. The headway hold above only prevents a rear-end;
     -- it does nothing about bunching, where two trains orbit the loop a few
@@ -1032,9 +1002,22 @@ end)
 -- ============================================
 local STATION_NAMES = {
     [0] = {  -- main line, keyed by stop node
-        [462] = 'Lumber Mill', [651] = 'Paleto Bay', [1481] = 'Quarry',
-        [1555] = 'Wind Farm', [1701] = 'Power Plant', [2434] = 'Downtown',
-        [2667] = 'Port Depot', [2865] = 'Downtown', [3891] = 'Quarry',
+        -- Downtown and Quarry each appear TWICE because the line calls at them
+        -- in both directions, not because they are duplicates. Measured from
+        -- live train positions:
+        --   Downtown 2434 (680,-1236) running south, 2865 (664,-988) north
+        --   Quarry   1481 (2552,2846) running south-west, 3891 (2496,2786) north-east
+        -- Roughly 250m apart at Downtown and 50m at Quarry - the same station,
+        -- opposite platforms. Naming them by direction tells a passenger which
+        -- way the train is going; east/west would be meaningless here.
+        [462] = 'Lumber Mill', [651] = 'Paleto Bay',
+        [1481] = 'Quarry (Southbound)',
+        [1555] = 'Wind Farm',                 -- skipped, see config.skipStations
+        [1701] = 'Power Plant',
+        [2434] = 'Davis Interchange (Southbound)',   -- ~400m to the metro's Davis platform
+        [2667] = 'Port Depot',
+        [2865] = 'Davis Interchange (Northbound)',   -- ~400m to the metro's Davis platform
+        [3891] = 'Quarry (Northbound)',
         [4159] = 'Sandy Shores',
     },
     [3] = {
@@ -1097,7 +1080,9 @@ exports('getArrivalBoard', function()
         if track and track.hasStationInformation and track:hasStationInformation() then
             local ok, stations = pcall(function() return track:getStationInformation() end)
             if ok and stations then
+                local skipB = (config.general.skipStations or {})[trackIndex] or {}
                 for si, st in ipairs(stations) do
+                    if skipB[st.node] then goto nextStation end
                     local entry = {
                         station = names[st.node] or ('Stop ' .. si),
                         node = st.node,
@@ -1140,6 +1125,7 @@ exports('getArrivalBoard', function()
                     end
                     table.sort(entry.arrivals, function(a, b) return a.eta < b.eta end)
                     board[#board + 1] = entry
+                    ::nextStation::
                 end
             end
         end
