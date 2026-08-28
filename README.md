@@ -1,6 +1,6 @@
 # dps-trains
 
-The Del Perro Sands railway: a scheduled passenger service on the heavy-rail
+The DelPerroSands railway: a scheduled passenger service on the heavy-rail
 loop and a metro on the city line, with real station stops, live arrival times
 on the phone, and trains that run to a timetable whether or not anyone is
 watching them.
