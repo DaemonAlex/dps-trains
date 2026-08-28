@@ -5,11 +5,94 @@ loop and a metro on the city line, with real station stops, live arrival times
 on the phone, and trains that run to a timetable whether or not anyone is
 watching them.
 
-
 **Credit:** Walter (https://www.gta5-mods.com/vehicles/overhauled-trains-lore-friendly-liveries).
-**Credit:** Forked (https://github.com/Ehbw) and substantially rewritten and polsished. 
-**Credit:** to the upstream author (https://github.com/VenomXNL/XNL-FiveM-Trains-U3)  for the track-node architecture and traintracking that everything here is              built on.
-**Credit:** Big Daddy Scripts for the open Source work on Walters trains :-).
+**Credit:** Forked (https://github.com/Ehbw) and substantially rewritten and polished.
+**Credit:** to the upstream author (https://github.com/VenomXNL/XNL-FiveM-Trains-U3) for the track-node architecture and train tracking that everything here is built on.
+**Credit:** Big Daddy Scripts for the open source work on Walter's trains :-).
+
+## The four resources
+
+The railway is four resources with one job each. Only `dps-trains` and
+`dps-trains-stock` are required; the other two are optional layers on top.
+
+```
+dps-trains-stock   assets      models, consists, TRAINCONFIGS_FILE
+       │
+dps-trains         engine      scheduling, movement, station stops   <- you are here
+       ├──────────────────────▶ dps-traintools    players     boarding, seating, riders
+       └──getArrivalBoard()───▶ dps-transitapp    passengers  live arrivals on the phone
+```
+
+| Resource | Needs | Works without the others? |
+|---|---|---|
+| `dps-trains-stock` | nothing | yes — it is pure assets |
+| `dps-trains` | `ox_lib`, `dps-trains-stock` | yes, but with no custom rolling stock |
+| `dps-traintools` | `ox_lib` | yes — it works on any train entity, vanilla included |
+| `dps-transitapp` | `lb-phone`, `ox_lib`, `dps-trains` | no — it is a view of `getArrivalBoard` |
+
+## Requirements
+
+| | |
+|---|---|
+| Server artifact | **10188 or newer** |
+| OneSync | **required** — declared in the manifest |
+| `ox_lib` | required |
+| `lb-phone` | only for `dps-transitapp` |
+| Game build | 3258 or newer |
+
+`useServerSetter` **cannot** be enabled on current artifacts — the `CREATE_TRAIN`
+native is absent, and turning it on makes this resource refuse to start. Trains
+are therefore created by nearby clients; see [How a train actually works](#how-a-train-actually-works).
+
+## Installation
+
+1. **Drop all four resources** into your resources folder. `dps-trains-stock` is
+   ~300 MB of models — expect a first-join download.
+
+2. **Start them in this order.** `dps-trains-stock` must register the consist
+   table before `dps-trains` reads it:
+
+   ```cfg
+   ensure ox_lib
+   ensure dps-trains-stock
+   ensure dps-trains
+   ensure dps-traintools     # optional
+   ensure lb-phone
+   ensure dps-transitapp     # optional
+   ```
+
+   If they live in a category folder that is `ensure`d as a whole, alphabetical
+   order already puts `dps-trains` before `dps-trains-stock` — which is the wrong
+   way round. Start them explicitly.
+
+3. **Check the consist indices line up.** `configs/freight.lua` references
+   variations by number, and those numbers come from
+   `dps-trains-stock/data/trains.xml`. An index the game does not have **crashes
+   clients**. Defaults are 28 Axsellya, 29 Brown Streak, 31 metro.
+
+4. **Reboot and rejoin.** Consist data is ingested by the client at join —
+   resource restarts do not reload it.
+
+5. **Verify** with `traindebug` in the server console. You should see one line
+   per train with a node that advances between calls. `handle=nil` is normal for
+   a train with no player near it.
+
+## Configuration
+
+| File | What it controls |
+|---|---|
+| `configs/freight.lua` | mainline trains: how many, where they start, which consist |
+| `configs/metro.lua` | metro trains |
+| `configs/general.lua` | line speed, dwell time, skipped stations, model preload list |
+| `server/main.lua` | station names, keyed by node |
+
+Start locations are **node indices**, not coordinates — `CTrain` derives the
+position from the node, so spacing is exact. Use `trainspace <track> <count>` to
+generate evenly spaced ones.
+
+To change the number of trains, edit both `config.count` and `startLocations` in
+`configs/freight.lua`; they must agree.
+
 ## Service
 
 | | |
