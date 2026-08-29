@@ -12,6 +12,17 @@ local ghostStepClock = {}
 -- station it last served so it does not re-trigger on the same one.
 local ghostDwellUntil = {}
 local ghostServed = {}
+-- Headway holds for GHOST trains, set by server/main.lua's headway pass.
+-- Ghosts used to ignore headway entirely and could advance straight through
+-- the train ahead (typically a dwelling one at a platform), which swapped
+-- running order and permanently paired services.
+local ghostHold = {}
+
+-- A materialised train pays for every stop twice: the dwell itself plus the
+-- braking ramp in (staged from 500m out) and the acceleration back to line
+-- speed - roughly this much wall time. A ghost stops instantly, so it holds
+-- for the penalty on top of its dwell to keep both worlds on the same clock.
+local GHOST_BRAKE_PENALTY_MS <const> = 25000
 
 
 local SPEED_ZONES = {
@@ -33,6 +44,45 @@ function DPS_ZoneSpeed(trackIndex, node, fallback)
         if node >= z.from and node <= z.to then return z.speed end
     end
     return OPEN_SPEED
+end
+
+---Gap-regulated dwell, shared by BOTH the materialised station stop and the
+---ghost one. Compares this train's gap to the train ahead against the ideal
+---even spacing for its track and uses dwell as the correction: bunched trains
+---hold longer and drop back into slot, a train with an oversized gap ahead
+---cuts its dwell short and catches up. 0.4x-2.0x so it reads as normal
+---variation in stop length. Previously this only ever ran for materialised
+---trains (main.lua adjusted private.dwellUntil after the fact), so the fleet
+---was unregulated whenever nobody was near it - which is most of the time.
+---@param train table
+---@param baseDwell number
+---@return number
+function DPS_RegulatedDwell(train, baseDwell)
+    local trains = TrackedTrains  -- global, owned by server/main.lua
+    if not trains then return baseDwell end
+    local trk = tracks[train.trackIndex]
+    local num = trk and trk.numNodes or 0
+    if num <= 0 or not train.currentNode then return baseDwell end
+
+    local n, gapAhead = 0, nil
+    for i = 1, #trains do
+        local b = trains[i]
+        if b and b.trackIndex == train.trackIndex then
+            n = n + 1
+            if b.id ~= train.id and b.currentNode then
+                local gap = (b.currentNode - train.currentNode) % num
+                if gap > 0 and (not gapAhead or gap < gapAhead) then gapAhead = gap end
+            end
+        end
+    end
+    if n <= 1 or not gapAhead then return baseDwell end
+
+    local ideal = num / n
+    local scale = 2.0 - (gapAhead / ideal)
+    if scale < 0.4 then scale = 0.4 elseif scale > 2.0 then scale = 2.0 end
+    lib.print.debug(("Train %i regulating: gap %d of ideal %.0f nodes, dwell x%.2f"):format(
+        train.id, gapAhead, ideal, scale))
+    return math.floor(baseDwell * scale)
 end
 
 ---@field isCreating boolean
@@ -153,6 +203,26 @@ end
 ---@param value number?
 function Train:SetDwellUntil(value)
     self.private.dwellUntil = value
+end
+
+---Headway hold flag, set by server/main.lua's headway pass. Lives on private
+---so the zone-speed block and the arrival board ('delayed') can actually see
+---it - the old pass kept holds in a table nothing else read.
+---@param value boolean
+function Train:SetHeadwayHold(value)
+    self.private.headwayHold = value or nil
+end
+
+---Ghost headway hold (ghosts have no state bag to set a speed on; they simply
+---stop advancing while held).
+---@param value boolean
+function Train:SetGhostHold(value)
+    ghostHold[self.id] = value or nil
+end
+
+---Diagnostics for traindebug: ghost dwell/hold live in locals here.
+function Train:GetGhostDebug()
+    return ghostDwellUntil[self.id], ghostHold[self.id] == true
 end
 
 function Train:GetClientInfo()
@@ -587,6 +657,13 @@ function Train:UpdatePosition()
         ghostDwellUntil[self.id] = nil
     end
 
+    -- Headway: hold short of the train ahead exactly like a materialised train
+    -- would. The clock above keeps ticking while held, so release resumes at a
+    -- normal 1s budget instead of teleporting.
+    if ghostHold[self.id] then
+        return
+    end
+
     local stationNodes
     if self.stopsAtStation and self.track.hasStationInformation and self.track:hasStationInformation() then
         local ok, info = pcall(function() return self.track:getStationInformation() end)
@@ -600,7 +677,10 @@ function Train:UpdatePosition()
         end
     end
 
-    local budget = (self.speed or 10.0) * dt
+    -- Advance at the same effective cruise a materialised train runs
+    -- (zone speed, e.g. 28 on track 0), not the raw config speed — keeps the
+    -- two physics on one clock structurally rather than by coincidence.
+    local budget = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed or 10.0) * dt
     local guard = 0
 
     repeat
@@ -614,7 +694,11 @@ function Train:UpdatePosition()
             local hit = stationNodes[self.currentNode]
             if hit and ghostServed[self.id] ~= self.currentNode then
                 ghostServed[self.id] = self.currentNode
-                ghostDwellUntil[self.id] = now + (config.general.stationDwellTime or 30000)
+                -- Regulated like a real stop, plus the brake/accel time a
+                -- materialised train pays around every stop and a ghost doesn't.
+                ghostDwellUntil[self.id] = now
+                    + DPS_RegulatedDwell(self, config.general.stationDwellTime or 30000)
+                    + GHOST_BRAKE_PENALTY_MS
                 return
             end
         end
@@ -776,30 +860,50 @@ function Train:Update(time)
                     local sn = sInfo[si] and sInfo[si].node
                     -- Fire only on the APPROACH side, never past the platform.
                     -- math.abs() triggered either side, so a train tripping it a
-                    -- few nodes late stopped ~35m beyond the stop. This way the
-                    -- worst case is stopping slightly short, which reads far
-                    -- better than overshooting.
+                    -- few nodes late stopped ~35m beyond the stop.
+                    --
+                    -- Window tightened 5 -> 1 node (2026-08-28): five nodes is
+                    -- ~35m, and trains were visibly parking short of city
+                    -- platforms. By the time this fires the staged braking has
+                    -- the train at 3 m/s inside 60m, and the server samples
+                    -- every second (~3m of travel), so a 1-node window cannot
+                    -- be stepped over.
                     local ahead = sn - self.currentNode
-                    if sn and not skip[sn] and ahead >= 0 and ahead <= 5 then
+                    if sn and not skip[sn] and ahead >= 0 and ahead <= 1 then
                         atStationNode = true
                         break
                     end
                 end
             end
 
-            if distanceToStation <= 22.0 or atStationNode then
+            -- Stop window tightened 22m -> 8m (2026-08-28): 22m of slack at a
+            -- 3 m/s crawl meant halting well before the platform. 8m or the
+            -- 1-node match puts the nose on the stop.
+            if distanceToStation <= 8.0 or atStationNode then
                 if not self.private.servedStation then
                     self.private.servedStation = stationIndex
                     self.private.approachSlow = nil
-                    self.private.dwellUntil = now + (config.general.stationDwellTime or 180000)
+                    -- Regulated at the moment the stop begins - same formula the
+                    -- ghost path uses, so the whole fleet self-spaces.
+                    self.private.dwellUntil = now
+                        + DPS_RegulatedDwell(self, config.general.stationDwellTime or 30000)
                     local state = self:getState()
                     if state then
                         state:set("trainSpeed", 0.0, true)
                         if self.doors then
+                            -- stationIndex is the station NODE (getClosestStation
+                            -- returns station.node), so indexing the stations
+                            -- ARRAY with it always missed and doors defaulted to
+                            -- side 1. Match by node instead.
                             local side = 1
                             local okS, info = pcall(function() return self.track:getStationInformation() end)
-                            if okS and info and info[stationIndex] and info[stationIndex].side then
-                                side = info[stationIndex].side
+                            if okS and info then
+                                for si = 1, #info do
+                                    if info[si] and info[si].node == stationIndex then
+                                        side = info[si].side or 1
+                                        break
+                                    end
+                                end
                             end
                             state:set("trainDoors", side, true)
                         end

@@ -61,14 +61,16 @@ config.startLocations = {
     --     effective loop                    = 21.5 min
     --     / 6 trains                        = ~3.6 min between trains
     --
-    -- Six is safe against bunching because ghost trains now observe station
-    -- dwells (server/CTrain.lua). Previously the station cycle lived inside
-    -- `if self.handle`, so ghosts skipped every platform AND ran at one node
-    -- per tick (~7 m/s) against a materialised train's 30 - a 4x speed gap plus
-    -- unequal stops, which made trains catch each other no matter the spacing.
-    -- With both fixed, every train loses identical time and drift is
-    -- second-order. 704 nodes of spacing against a 40-node headway trigger
-    -- leaves 664 nodes of margin.
+    -- Six holds its spacing because ghost and materialised trains now run the
+    -- SAME schedule physics (2026-08-28, server/CTrain.lua):
+    --   * ghosts advance at the zone cruise (28), observe station dwells AND
+    --     headway holds, and pay a brake/accel penalty per stop like a real
+    --     train does;
+    --   * every stop - ghost or materialised - sets a gap-regulated dwell
+    --     (bunched trains hold up to 2x, gapped trains cut to 0.4x), so the
+    --     fleet self-spaces continuously, not just when someone is watching.
+    -- Check the line's health any time with `traindebug` in the server
+    -- console: the per-track gap table should sit near the ideal (704 here).
     {node = 1,    direction = true, variation = 28, doors = true},   -- Axsellya Express   -- Axsellya Express
     {node = 705,  direction = true, variation = 29, doors = true},   -- Brown Streak
     {node = 1409, direction = true, variation = 28, doors = true},   -- Axsellya Express

@@ -152,6 +152,20 @@ The two states must behave identically or the service falls apart:
   `if self.handle`, so ghosts used to skip every platform. That made trains
   materialise *past* the station a player was standing at, and meant only
   observed trains lost dwell time — which is what made the fleet bunch.
+- **Ghosts obey headway holds** (2026-08-28). A held ghost simply stops
+  advancing. Before this, a ghost could drive straight through the (usually
+  dwelling) train ahead, swapping running order and permanently pairing
+  services.
+- **Ghosts pay the braking bill.** A materialised train loses ~25 s per stop to
+  the 500 m braking ramp and the acceleration back to line speed; a ghost stops
+  instantly, so it holds that long extra at each platform to stay on the same
+  clock.
+- **Every stop is gap-regulated** — ghost or materialised, `DPS_RegulatedDwell`
+  scales the dwell at the moment the stop begins: bunched trains hold up to 2×
+  and drop back into slot, a train with an oversized gap ahead cuts to 0.4× and
+  catches up. The old regulation only ever saw materialised trains, so the
+  fleet ran unregulated whenever nobody was near it — which is most of the
+  time.
 
 ## Sharp edges
 
@@ -191,7 +205,10 @@ stops, headway holds and bunching to fail simultaneously.
 **Station coordinates sit well off the rails** — 51 m at Lumber Mill, 76 m at
 Davis Interchange Northbound even at closest approach. A pure distance test for
 "at the platform" is unreachable at some stops, so the trigger also matches the
-station **node**, within 5 nodes and only on the approach side.
+station **node**, within **1 node** and only on the approach side (was 5 nodes
+/ 22 m, which parked trains up to ~35 m short of city platforms — by trigger
+time staged braking has the train at 3 m/s, so the 1-second server sampling
+covers ~3 m per tick and cannot step over the window).
 
 **Private fields are not writable from outside the class.** `server/main.lua`
 cannot assign to `train.private.*`; doing so throws and aborts that pass of the
@@ -219,11 +236,16 @@ luac5.4 -p /tmp/x.lua
 ## Safeguards
 
 - **Headway hold** — a train within 40 nodes of the one ahead stops until the
-  gap clears.
-- **Physical separation** — the headway check compares track *sequence*, and
-  track 0 folds back on itself, so two trains 44 m apart on the ground can be
-  1,300 nodes apart in the node list. A ground-distance test catches that; only
-  one train of a pair is ever held, so a fold-back meeting cannot deadlock.
+  gap clears. Applies to ghosts too (they hold by not advancing), and the hold
+  is visible on `private.headwayHold` via `Train:SetHeadwayHold`, so the
+  arrival board can show "delayed" and the speed logic cannot fight it.
+- **Physical separation — removed.** It held a train whenever another was
+  within 60 m on the ground, but track 0 folds back on itself and the check
+  could not tell a legitimate parallel pass from a head-on one, so it stopped
+  trains dead every time services met on adjacent rails. The pass-through it
+  guarded against was actually the node-4226 stranding bug, fixed at source in
+  `getClosestTrackNodeWithinRange`; same-direction following is covered by the
+  headway hold.
 - **Stranded-train recovery** — a materialised train that has not advanced for
   120 s is culled and respawned. Trains within 40 nodes of a station are exempt:
   the ghost dwell happens *before* materialisation, so a train can be legitimately
@@ -237,7 +259,7 @@ luac5.4 -p /tmp/x.lua
 
 | | |
 |---|---|
-| `traindebug` | every train: id, type, track, node, handle, dwell, coords |
+| `traindebug` | every train: id, type, track, node, handle, dwell (mat *and* ghost), hold, coords — plus a per-track **gap table** vs the ideal spacing (the one-line health check for bunching) |
 | `boarddebug` | arrival-board internals: stations, cumulative distances |
 | `trainspace <track> <count>` | evenly spaced node coordinates for start locations |
 | `setr ox:printlevel:dps-trains debug` | verbose lifecycle logging |
