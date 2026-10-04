@@ -19,15 +19,60 @@ local stuckWatch = {}
 -- physical-separation holds, keyed by train id. Cannot live on train.private:
 -- that is a protected ox_lib class field and rejects new keys.
 local physHoldState = {}
--- headway holds and dwell-regulation bookkeeping, keyed by train id. Same
--- reason as physHoldState: train.private rejects writes from outside the class.
+-- headway hold bookkeeping, keyed by train id. Same reason as physHoldState:
+-- train.private rejects writes from outside the class (the visible flag is set
+-- through Train:SetHeadwayHold). Dwell regulation moved into CTrain
+-- (DPS_RegulatedDwell) so it applies to ghost and materialised stops alike.
 local headwayState = {}
-local dwellRegulated = {}
+
+-- DPS Paleto block (2026-09-21). The Roxwood shuttle (track 24) and the mainline
+-- (track 0) share the last ~620 m of rail into Paleto: measured node by node, the
+-- two track definitions sit 0.0 m apart from track-24 node 414 southward, so they
+-- are the same rails. The headway pass below only compares trains on the SAME
+-- track, so nothing kept these two apart. Treat the station and its approach as
+-- one single-line block: one train inside at a time, first in keeps it, everyone
+-- else holds outside until it clears. Works from either direction, either track.
+local PALETO_BLOCK = vec3(185.08, 6358.74, 30.75)  -- Paleto platform (track 24 node 476)
+local PALETO_IN    = 260.0   -- inside this radius = occupying the block
+local PALETO_WAIT  = 700.0   -- hold out here while the block is taken
+local paletoOwnerId = nil
+
+---Who owns the Paleto block this tick, or nil when it is empty.
+---@param trains table
+---@return number?
+function DPS_UpdatePaletoBlock(trains)
+    local owner, ownerDist
+    for i = 1, #trains do
+        local t = trains[i]
+        if t and t.currentCoords then
+            local d = #(t.currentCoords - PALETO_BLOCK)
+            if d < PALETO_IN then
+                if paletoOwnerId and t.id == paletoOwnerId then
+                    return paletoOwnerId  -- the train already in there keeps it until it leaves
+                end
+                if not ownerDist or d < ownerDist then owner, ownerDist = t.id, d end
+            end
+        end
+    end
+    paletoOwnerId = owner
+    return owner
+end
+
+---True when this train must wait outside the Paleto block.
+---@param train table
+---@param ownerId number?
+---@return boolean
+function DPS_PaletoBlockHold(train, ownerId)
+    if not ownerId or not train or train.id == ownerId or not train.currentCoords then return false end
+    return #(train.currentCoords - PALETO_BLOCK) < PALETO_WAIT
+end
 
 ---@type table<number, CTracks>
 tracks = {}
 ---@type table<number, CTrainE>
 local trackingTrains = {}
+-- Global alias: CTrain's DPS_RegulatedDwell computes fleet gaps from this.
+TrackedTrains = trackingTrains
 ---@type boolean
 local sv_enableNetEventReassembly = GetConvar("sv_enableNetEventReassembly", "true") == "true"
 
@@ -235,10 +280,11 @@ local function iterateTrains()
     -- DPS headway: trains stop at stations now, so a follower on the same track
     -- must hold short instead of rear-ending the train ahead. 40 nodes ~ 300m.
     local HEADWAY_NODES = 40
+    local paletoOwner = DPS_UpdatePaletoBlock(trackingTrains)
     for i=1, #trackingTrains do
         local a = trackingTrains[i]
         if a and a.currentNode and a.private and not a.private.dwellUntil then
-            local blocked = false
+            local blocked = DPS_PaletoBlockHold(a, paletoOwner)
             for j=1, #trackingTrains do
                 local b = trackingTrains[j]
                 if b and j ~= i and b.trackIndex == a.trackIndex and b.currentNode then
@@ -256,10 +302,20 @@ local function iterateTrains()
             local state = a.getState and a:getState()
             if blocked and not headwayState[a.id] then
                 headwayState[a.id] = true
-                if state then state:set("trainSpeed", 0.0, true) end
+                if a.SetHeadwayHold then a:SetHeadwayHold(true) end
+                if state then
+                    state:set("trainSpeed", 0.0, true)
+                else
+                    -- Ghost: no state bag to command - it holds by not advancing.
+                    -- Ghosts used to ignore headway entirely and drove straight
+                    -- through the (usually dwelling) train ahead.
+                    if a.SetGhostHold then a:SetGhostHold(true) end
+                end
                 lib.print.debug(("Train %i holding for headway"):format(a.id))
             elseif not blocked and headwayState[a.id] then
                 headwayState[a.id] = nil
+                if a.SetHeadwayHold then a:SetHeadwayHold(false) end
+                if a.SetGhostHold then a:SetGhostHold(false) end
                 local resumeSpeed = DPS_ZoneSpeed and DPS_ZoneSpeed(a.trackIndex, a.currentNode, a.speed) or a.speed
                 if state then state:set("trainSpeed", resumeSpeed, true) end
                 lib.print.debug(("Train %i resuming, headway clear"):format(a.id))
@@ -349,53 +405,11 @@ local function iterateTrains()
     -- Same-direction following is still covered by the node-based headway hold
     -- above, which is the real collision risk.
 
-    -- DPS schedule regulation. The headway hold above only prevents a rear-end;
-    -- it does nothing about bunching, where two trains orbit the loop a few
-    -- hundred metres apart and the line effectively runs one fewer service.
-    -- So each train, once stopped at a station, compares its gap to the train
-    -- ahead against the ideal even spacing for its track and uses dwell as the
-    -- correction: bunched trains hold longer and drop back into their slot, a
-    -- train with an oversized gap ahead cuts its dwell short and catches up.
-    -- Dwell stays within 0.4x-2.0x the configured base so this reads as normal
-    -- variation in stop length rather than a train parked at a platform.
-    -- Applied once per station stop (keyed on servedStation) so it cannot
-    -- oscillate as the gap changes while sitting.
-    local baseDwell = (config.general and config.general.stationDwellTime) or 180000
-    local perTrack = {}
-    for i=1, #trackingTrains do
-        local t = trackingTrains[i]
-        if t and t.trackIndex then perTrack[t.trackIndex] = (perTrack[t.trackIndex] or 0) + 1 end
-    end
-    for i=1, #trackingTrains do
-        local a = trackingTrains[i]
-        if a and a.private and a.private.dwellUntil and a.currentNode
-           and dwellRegulated[a.id] ~= a.private.servedStation then
-            local trk = tracks[a.trackIndex]
-            local num = trk and trk.numNodes or 0
-            local n = perTrack[a.trackIndex] or 1
-            if num > 0 and n > 1 then
-                local gapAhead
-                for j=1, #trackingTrains do
-                    local b = trackingTrains[j]
-                    if b and j ~= i and b.trackIndex == a.trackIndex and b.currentNode then
-                        local gap = (b.currentNode - a.currentNode) % num
-                        if gap > 0 and (not gapAhead or gap < gapAhead) then gapAhead = gap end
-                    end
-                end
-                if gapAhead then
-                    local ideal = num / n
-                    local scale = 2.0 - (gapAhead / ideal)
-                    if scale < 0.4 then scale = 0.4 elseif scale > 2.0 then scale = 2.0 end
-                    if a.SetDwellUntil then
-                        a:SetDwellUntil(GetGameTimer() + math.floor(baseDwell * scale))
-                    end
-                    dwellRegulated[a.id] = a.private.servedStation
-                    lib.print.debug(("Train %i regulating: gap %d of ideal %.0f nodes, dwell x%.2f"):format(
-                        a.id, gapAhead, ideal, scale))
-                end
-            end
-        end
-    end
+    -- Schedule regulation moved into CTrain (DPS_RegulatedDwell): each stop -
+    -- ghost or materialised - now sets a gap-regulated dwell at the moment it
+    -- begins. The old pass here re-wrote private.dwellUntil after the fact and
+    -- could only ever see materialised trains, so the fleet ran unregulated
+    -- whenever nobody was near it (which is most of the time).
 
     if blipData and config.general.showTrainBlips then
         if sv_enableNetEventReassembly then
@@ -534,6 +548,7 @@ AddEventHandler("onResourceStop", function(resourceName)
         trackingTrains[i]:Remove()
     end
     trackingTrains = {}
+    TrackedTrains = trackingTrains
 end)
 
 RegisterNetEvent("Ehbw-Trains:fetchTrainData", function ()
@@ -976,15 +991,50 @@ end, true)
 RegisterCommand('traindebug', function(source)
     if source ~= 0 then return end
     local n = 0
+    local nowMs = GetGameTimer()
+    local byTrack = {}
     for i = 1, #trackingTrains do
         local tr = trackingTrains[i]
         if tr then
             n = n + 1
-            print(('[traindebug] id=%s type=%s track=%s node=%s handle=%s dwell=%s coords=%s'):format(
+            -- Show ghost dwell/hold too: the old print only knew about
+            -- private.dwellUntil, so a ghost standing at a platform looked
+            -- identical to one cruising - which made every bunching
+            -- investigation start blind.
+            local gDwell, gHold = nil, false
+            if tr.GetGhostDebug then gDwell, gHold = tr:GetGhostDebug() end
+            local dwellStr = '-'
+            if tr.private and tr.private.dwellUntil then
+                dwellStr = ('mat:%ds'):format(math.max(0, math.floor((tr.private.dwellUntil - nowMs) / 1000)))
+            elseif gDwell then
+                dwellStr = ('ghost:%ds'):format(math.max(0, math.floor((gDwell - nowMs) / 1000)))
+            end
+            local holdStr = (tr.private and tr.private.headwayHold) and 'headway'
+                or (gHold and 'ghost-headway') or '-'
+            print(('[traindebug] id=%s type=%s track=%s node=%s handle=%s dwell=%s hold=%s coords=%s'):format(
                 tostring(tr.id), tostring(tr.type), tostring(tr.trackIndex),
-                tostring(tr.currentNode), tostring(tr.handle),
-                tostring(tr.private and tr.private.dwellUntil),
+                tostring(tr.currentNode), tostring(tr.handle), dwellStr, holdStr,
                 tr.currentCoords and ('%.0f,%.0f'):format(tr.currentCoords.x, tr.currentCoords.y) or 'nil'))
+            if tr.trackIndex and tr.currentNode then
+                byTrack[tr.trackIndex] = byTrack[tr.trackIndex] or {}
+                byTrack[tr.trackIndex][#byTrack[tr.trackIndex] + 1] = tr.currentNode
+            end
+        end
+    end
+    -- Per-track gap table: the single number that says whether the line is
+    -- healthy. Every gap near the ideal = evenly spaced; a small gap = bunching.
+    for ti, nodes in pairs(byTrack) do
+        local trk = tracks[ti]
+        local num = trk and trk.numNodes or 0
+        if num > 0 and #nodes > 1 then
+            table.sort(nodes)
+            local parts = {}
+            for i = 1, #nodes do
+                local nxt = nodes[(i % #nodes) + 1]
+                parts[#parts + 1] = tostring((nxt - nodes[i]) % num)
+            end
+            print(('[traindebug] track %d gaps: %s (ideal %d)'):format(
+                ti, table.concat(parts, ', '), math.floor(num / #nodes)))
         end
     end
     print(('[traindebug] %d trains tracked'):format(n))
@@ -1017,6 +1067,8 @@ local STATION_NAMES = {
         [2434] = 'Davis Interchange (Southbound)',   -- ~400m to the metro's Davis platform
         [2667] = 'Port Depot',
         [2865] = 'Davis Interchange (Northbound)',   -- ~400m to the metro's Davis platform
+        [2357] = 'Downtown LS (Southbound)', [2925] = 'Downtown LS (Northbound)',   -- new stops, Damon 2026-09-29
+        [2792] = 'Market Square',   -- northbound only, Damon 2026-09-29
         [3891] = 'Quarry (Northbound)',
         [4159] = 'Sandy Shores',
     },
@@ -1026,6 +1078,9 @@ local STATION_NAMES = {
         [689] = 'Little Seoul East', [782] = 'Davis', [1078] = 'Burton',
         [1162] = 'Portola Drive',
     },
+    [12] = {  -- Roxwood shuttle. Stops added 2026-09-21 from Damon's F3 marks.
+        [94] = 'LB Bay',
+    },
 }
 local TRAIN_LABELS = {
     metro = { label = 'Metro', color = '#4aa3ff' },
@@ -1034,7 +1089,10 @@ local function trainLabel(train)
     -- Named the way a passenger reads a departure board. Brown Streak Railroad
     -- is the GTA rail company the streak model family is named for; Axsellya
     -- Express is the DPS name for the coaster set.
-    if train.type == 'metro' then return 'Metro', '#4aa3ff' end
+    -- DPS 2026-09-29: name the SERVICE. Every train is spawned as type 'metro',
+    -- so the track tells them apart: track 0 is the regional line.
+    if train.trackIndex == 0 then return 'Regional Train', '#3ad06a' end
+    if train.type == 'metro' then return 'Light Rail', '#4aa3ff' end
     if train.variation == 28 then return 'Axsellya Express', '#3ad06a' end
     if train.variation == 29 then return 'Brown Streak', '#e8d24a' end
     return 'Freight', '#f08a3c'
@@ -1173,3 +1231,10 @@ RegisterCommand('boarddebug', function(src)
     for _, e in ipairs(board) do if #e.arrivals > 0 then withArr = withArr + 1 end end
     print(('[boarddebug] board entries = %d, with arrivals = %d'):format(#board, withArr))
 end, true)
+
+
+-- DPS 2026-09-21 diagnostic: receives /trackprobe from a client and prints the
+-- engine's own track list, so we can see whether the Roxwood line exists at all.
+RegisterNetEvent('dps-trains:trackprobe', function(report)
+    print(('[trackprobe] from %s (%s): %s'):format(source, GetPlayerName(source) or '?', report))
+end)

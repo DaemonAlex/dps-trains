@@ -12,6 +12,26 @@ local ghostStepClock = {}
 -- station it last served so it does not re-trigger on the same one.
 local ghostDwellUntil = {}
 local ghostServed = {}
+-- DPS 2026-09-21: per-train direction sign for ping-pong reversal.
+-- -1 means the train is backing out of a terminus; cleared whenever the entity
+-- is dropped, because a fresh one is always created facing self.direction.
+-- Cannot live on train.private - that is a protected ox_lib class field.
+local reverseSign = {}
+-- Headway holds for GHOST trains, set by server/main.lua's headway pass.
+-- Ghosts used to ignore headway entirely and could advance straight through
+-- the train ahead (typically a dwelling one at a platform), which swapped
+-- running order and permanently paired services.
+local ghostHold = {}
+
+-- Tracks that belong to DPS lines rather than the vanilla network. A train
+-- configured onto one of these never inherits an engine-reported track index.
+local PINNED_TRACKS = { [12] = true, [13] = true, [24] = true }
+
+-- A materialised train pays for every stop twice: the dwell itself plus the
+-- braking ramp in (staged from 500m out) and the acceleration back to line
+-- speed - roughly this much wall time. A ghost stops instantly, so it holds
+-- for the penalty on top of its dwell to keep both worlds on the same clock.
+local GHOST_BRAKE_PENALTY_MS <const> = 25000
 
 
 local SPEED_ZONES = {
@@ -23,7 +43,7 @@ local SPEED_ZONES = {
     -- broken. Add ranges back here if per-area speeds are ever wanted.
     [0] = {},
 }
-local OPEN_SPEED = 28.0
+local OPEN_SPEED = 23.1  -- 52 MPH, +15% for the regional line (Damon 2026-09-29); was 20.1 = 45 MPH (was 28 = 62mph, made the mainline haul ass)
 
 function DPS_ZoneSpeed(trackIndex, node, fallback)
     local zones = SPEED_ZONES[trackIndex]
@@ -33,6 +53,45 @@ function DPS_ZoneSpeed(trackIndex, node, fallback)
         if node >= z.from and node <= z.to then return z.speed end
     end
     return OPEN_SPEED
+end
+
+---Gap-regulated dwell, shared by BOTH the materialised station stop and the
+---ghost one. Compares this train's gap to the train ahead against the ideal
+---even spacing for its track and uses dwell as the correction: bunched trains
+---hold longer and drop back into slot, a train with an oversized gap ahead
+---cuts its dwell short and catches up. 0.4x-2.0x so it reads as normal
+---variation in stop length. Previously this only ever ran for materialised
+---trains (main.lua adjusted private.dwellUntil after the fact), so the fleet
+---was unregulated whenever nobody was near it - which is most of the time.
+---@param train table
+---@param baseDwell number
+---@return number
+function DPS_RegulatedDwell(train, baseDwell)
+    local trains = TrackedTrains  -- global, owned by server/main.lua
+    if not trains then return baseDwell end
+    local trk = tracks[train.trackIndex]
+    local num = trk and trk.numNodes or 0
+    if num <= 0 or not train.currentNode then return baseDwell end
+
+    local n, gapAhead = 0, nil
+    for i = 1, #trains do
+        local b = trains[i]
+        if b and b.trackIndex == train.trackIndex then
+            n = n + 1
+            if b.id ~= train.id and b.currentNode then
+                local gap = (b.currentNode - train.currentNode) % num
+                if gap > 0 and (not gapAhead or gap < gapAhead) then gapAhead = gap end
+            end
+        end
+    end
+    if n <= 1 or not gapAhead then return baseDwell end
+
+    local ideal = num / n
+    local scale = 2.0 - (gapAhead / ideal)
+    if scale < 0.4 then scale = 0.4 elseif scale > 2.0 then scale = 2.0 end
+    lib.print.debug(("Train %i regulating: gap %d of ideal %.0f nodes, dwell x%.2f"):format(
+        train.id, gapAhead, ideal, scale))
+    return math.floor(baseDwell * scale)
 end
 
 ---@field isCreating boolean
@@ -153,6 +212,26 @@ end
 ---@param value number?
 function Train:SetDwellUntil(value)
     self.private.dwellUntil = value
+end
+
+---Headway hold flag, set by server/main.lua's headway pass. Lives on private
+---so the zone-speed block and the arrival board ('delayed') can actually see
+---it - the old pass kept holds in a table nothing else read.
+---@param value boolean
+function Train:SetHeadwayHold(value)
+    self.private.headwayHold = value or nil
+end
+
+---Ghost headway hold (ghosts have no state bag to set a speed on; they simply
+---stop advancing while held).
+---@param value boolean
+function Train:SetGhostHold(value)
+    ghostHold[self.id] = value or nil
+end
+
+---Diagnostics for traindebug: ghost dwell/hold live in locals here.
+function Train:GetGhostDebug()
+    return ghostDwellUntil[self.id], ghostHold[self.id] == true
 end
 
 function Train:GetClientInfo()
@@ -587,6 +666,13 @@ function Train:UpdatePosition()
         ghostDwellUntil[self.id] = nil
     end
 
+    -- Headway: hold short of the train ahead exactly like a materialised train
+    -- would. The clock above keeps ticking while held, so release resumes at a
+    -- normal 1s budget instead of teleporting.
+    if ghostHold[self.id] then
+        return
+    end
+
     local stationNodes
     if self.stopsAtStation and self.track.hasStationInformation and self.track:hasStationInformation() then
         local ok, info = pcall(function() return self.track:getStationInformation() end)
@@ -600,7 +686,10 @@ function Train:UpdatePosition()
         end
     end
 
-    local budget = (self.speed or 10.0) * dt
+    -- Advance at the same effective cruise a materialised train runs
+    -- (zone speed, e.g. 28 on track 0), not the raw config speed — keeps the
+    -- two physics on one clock structurally rather than by coincidence.
+    local budget = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed or 10.0) * dt
     local guard = 0
 
     repeat
@@ -614,7 +703,11 @@ function Train:UpdatePosition()
             local hit = stationNodes[self.currentNode]
             if hit and ghostServed[self.id] ~= self.currentNode then
                 ghostServed[self.id] = self.currentNode
-                ghostDwellUntil[self.id] = now + (config.general.stationDwellTime or 30000)
+                -- Regulated like a real stop, plus the brake/accel time a
+                -- materialised train pays around every stop and a ghost doesn't.
+                ghostDwellUntil[self.id] = now
+                    + DPS_RegulatedDwell(self, config.general.stationDwellTime or 30000)
+                    + GHOST_BRAKE_PENALTY_MS
                 return
             end
         end
@@ -659,6 +752,21 @@ function Train:Update(time)
         local trackIndex = GetTrainTrackIndex(self.handle)
 
         if trackIndex ~= self.trackIndex then
+            -- DPS 2026-09-21: CREATE_MISSION_TRAIN takes coords but no track
+            -- index, so the engine binds a new train to whatever track is
+            -- NEAREST. At Roxwood Junction our shuttle line (24) passes 6.4m
+            -- from the vanilla main line (0), so the shuttle kept being born on
+            -- - or adopted onto - track 0 and then ran off down the main line as
+            -- a ghost. That is why no Roxwood train ever turned up.
+            -- Our own lines are pinned: drop the mis-bound entity and stay a
+            -- ghost on the configured line instead of inheriting track 0.
+            if PINNED_TRACKS[self.trackIndex] then
+                lib.print.warn(("Train %i is pinned to track %i but the engine bound handle %i to track %i at node %s - dropping the entity, keeping the line"):format(
+                    self.id, self.trackIndex, self.handle, trackIndex, tostring(self.currentNode)))
+                self:Remove()
+                return nil
+            end
+
             lib.print.debug(("Detected track switch, updating track data"))
 
             if not tracks[trackIndex] then
@@ -704,7 +812,7 @@ function Train:Update(time)
 
         -- speed zones: while free-running (no dwell/brake), hold the zone speed
         if not self.isPlayerDriven and not self.private.dwellUntil and not self.private.approachSlow and not self.private.headwayHold then
-            local zoneSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
+            local zoneSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed) * (reverseSign[self.id] or 1)
             if self.private.appliedZoneSpeed ~= zoneSpeed then
                 local zstate = self:getState()
                 if zstate then
@@ -725,8 +833,52 @@ function Train:Update(time)
                     local state = self:getState()
                     if state then
                         if self.doors then state:set("trainDoors", false, true) end
-                        local resumeSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
-                        state:set("trainSpeed", resumeSpeed, true)
+                        -- DPS 2026-09-21: reverse at a ping-pong terminus.
+                        --
+                        -- Nothing ever flipped a MATERIALISED train. The
+                        -- ping-pong flip lives in StepNode, which only runs from
+                        -- UpdatePosition - the GHOST path. So after its terminus
+                        -- dwell a materialised train resumed forward speed and
+                        -- drove into the physical end of the rails. The engine
+                        -- clamps the lead car there while the second is still
+                        -- driven, and the second slams into the first hard
+                        -- enough to throw riders out (reported at the LS end of
+                        -- the Roxwood shuttle, track 12 node 335).
+                        --
+                        -- The stock is double-ended metro, so backing out is
+                        -- correct and keeps the entity - riders stay seated,
+                        -- which deleting and respawning the train would not do.
+                        local termNodes = self.track.numNodes or 0
+                        if self.track:isPingPongTrack() and self.currentNode and termNodes > 0
+                            and (self.currentNode >= termNodes - 1 or self.currentNode <= 2) then
+                            self.direction = not self.direction
+                            reverseSign[self.id] = -(reverseSign[self.id] or 1)
+                            lib.print.debug(("Train %i reversing at terminus node %s (track %s)"):format(
+                                self.id, tostring(self.currentNode), tostring(self.trackIndex)))
+                        end
+                        local resumeSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed) * (reverseSign[self.id] or 1)
+
+                        -- Gentle departure (DPS 2026-09-22, Damon: "it's taking
+                        -- off"). Handing the client line speed the instant the
+                        -- dwell ends makes the train leap away from the
+                        -- platform. Approaches already step down over half a
+                        -- kilometre; this steps UP the same way, so a departure
+                        -- reads like a train pulling out rather than a car
+                        -- launching. Each step re-checks state, because the
+                        -- train can be braking for the next stop or holding for
+                        -- headway by the time a later step fires.
+                        local departId = self.id
+                        for step = 1, 4 do
+                            local frac = step * 0.25
+                            SetTimeout((step - 1) * 2500, function()
+                                if not self.handle or not DoesEntityExist(self.handle) then return end
+                                if self.private.dwellUntil or self.private.approachSlow or self.private.headwayHold then return end
+                                local st = self:getState()
+                                if not st then return end
+                                st:set("trainSpeed", resumeSpeed * frac, true)
+                            end)
+                        end
+
                         state:set("trainState", 0, true)
                         self.private.appliedZoneSpeed = resumeSpeed
                     end
@@ -776,30 +928,50 @@ function Train:Update(time)
                     local sn = sInfo[si] and sInfo[si].node
                     -- Fire only on the APPROACH side, never past the platform.
                     -- math.abs() triggered either side, so a train tripping it a
-                    -- few nodes late stopped ~35m beyond the stop. This way the
-                    -- worst case is stopping slightly short, which reads far
-                    -- better than overshooting.
+                    -- few nodes late stopped ~35m beyond the stop.
+                    --
+                    -- Window tightened 5 -> 1 node (2026-08-28): five nodes is
+                    -- ~35m, and trains were visibly parking short of city
+                    -- platforms. By the time this fires the staged braking has
+                    -- the train at 3 m/s inside 60m, and the server samples
+                    -- every second (~3m of travel), so a 1-node window cannot
+                    -- be stepped over.
                     local ahead = sn - self.currentNode
-                    if sn and not skip[sn] and ahead >= 0 and ahead <= 5 then
+                    if sn and not skip[sn] and ahead >= 0 and ahead <= 1 then
                         atStationNode = true
                         break
                     end
                 end
             end
 
-            if distanceToStation <= 22.0 or atStationNode then
+            -- Stop window tightened 22m -> 8m (2026-08-28): 22m of slack at a
+            -- 3 m/s crawl meant halting well before the platform. 8m or the
+            -- 1-node match puts the nose on the stop.
+            if distanceToStation <= 8.0 or atStationNode then
                 if not self.private.servedStation then
                     self.private.servedStation = stationIndex
                     self.private.approachSlow = nil
-                    self.private.dwellUntil = now + (config.general.stationDwellTime or 180000)
+                    -- Regulated at the moment the stop begins - same formula the
+                    -- ghost path uses, so the whole fleet self-spaces.
+                    self.private.dwellUntil = now
+                        + DPS_RegulatedDwell(self, config.general.stationDwellTime or 30000)
                     local state = self:getState()
                     if state then
                         state:set("trainSpeed", 0.0, true)
                         if self.doors then
+                            -- stationIndex is the station NODE (getClosestStation
+                            -- returns station.node), so indexing the stations
+                            -- ARRAY with it always missed and doors defaulted to
+                            -- side 1. Match by node instead.
                             local side = 1
                             local okS, info = pcall(function() return self.track:getStationInformation() end)
-                            if okS and info and info[stationIndex] and info[stationIndex].side then
-                                side = info[stationIndex].side
+                            if okS and info then
+                                for si = 1, #info do
+                                    if info[si] and info[si].node == stationIndex then
+                                        side = info[si].side or 1
+                                        break
+                                    end
+                                end
                             end
                             state:set("trainDoors", side, true)
                         end
@@ -940,6 +1112,9 @@ end
 
 function Train:Remove()
     TriggerEvent("Ehbw-Trains:deletedTrainEntity", self.id)
+    -- A replacement entity is always created facing self.direction, so the
+    -- reverse sign must not outlive this one.
+    reverseSign[self.id] = nil
     if self.handle then
         if DeleteTrain then
             DeleteTrain(self.handle)

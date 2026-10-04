@@ -87,40 +87,31 @@ function Tracks:getClosestStation(node, direction, useCurrentNode)
         lib.print.error(("This track %i does not have any stations"):format(self.trackId))
         return -1, 0
     end
-    local distToStation = math.huge
-    local stationIndex = -1
-
     local coords = self:getNodeCoords(node)
-
-    for i=1, #self.private.stations do
+    -- Pick the NEAREST station AHEAD in the travel direction (min node delta),
+    -- not the first table entry. The old break-on-first logic returned the
+    -- lowest-node station for direction=false, so southbound trains never
+    -- braked and blew through every platform.
+    local bestNode, bestDelta, bestStation = -1, math.huge, nil
+    for i = 1, #self.private.stations do
         local station = self.private.stations[i]
-
-        if not station then
-            goto skip
-        end
-
-        if direction and node > station.node then
-            goto skip
-        end
-
-        if not direction and node < station.node then
-            goto skip
-        end
-
-        if node == station.node then
-            if not useCurrentNode then
-                goto skip
+        if station then
+            local sn = station.node
+            local delta
+            if not (node == sn and not useCurrentNode) then
+                if direction then
+                    if sn >= node then delta = sn - node end
+                else
+                    if sn <= node then delta = node - sn end
+                end
+            end
+            if delta and delta < bestDelta then
+                bestDelta = delta; bestNode = sn; bestStation = station
             end
         end
-
-        stationIndex = station.node
-        distToStation = #(coords - station.coords)
-        break
-        ---@diagnostic disable-next-line: code-after-break
-        ::skip::
     end
-
-    return stationIndex, distToStation
+    if bestNode == -1 or not bestStation then return -1, 0 end
+    return bestNode, #(coords - bestStation.coords)
 end
 
 ---@param coords vector3
@@ -157,14 +148,30 @@ function Tracks:getClosestTrackNodeWithinRange(coords, currentNode, direction)
     -- train stranded and culled it, dumping its passenger out mid-route.
     -- Observed: train 8 pinned at node 4226 while its coordinates travelled from
     -- (520, 3190) to (-546, 4968).
+    --
+    -- DPS 2026-09-21: the window has to follow the train's DIRECTION. On a
+    -- ping-pong line the return leg runs backwards - the true node DECREASES -
+    -- but a forward-only search cannot see those nodes, so the reported node
+    -- climbed away from reality (observed: the Roxwood shuttle sitting at the
+    -- Roxwood platform, coords -486,7660, reporting node 281 instead of 81).
+    -- Station stops, arrival times and the stuck detector all read that number,
+    -- which is why the shuttle ran straight through its own station on the way
+    -- back. Ping-pong tracks therefore search BOTH ways and clamp at the ends -
+    -- they have no wrap - while loop tracks keep the original forward wrap.
     local n = self.numNodes
     local minCoords = math.huge
     local node = -1
+    local pingPong = self.pingPongTrack == true
+    local from = pingPong and -100 or 0
 
-    for step = 0, 100 do
+    for step = from, 100 do
         local i = currentNode + step
-        if i > n then i = i - n end          -- wrap around the end of the loop
-        local p = (i >= 1 and i <= n) and self.private.nodes[i] or nil
+        if pingPong then
+            if i < 1 or i > n then i = nil end   -- no wrap on a there-and-back line
+        elseif i > n then
+            i = i - n                            -- wrap around the end of the loop
+        end
+        local p = (i and i >= 1 and i <= n) and self.private.nodes[i] or nil
         if p then
             local dist = #(p - coords)
             if dist < minCoords then
