@@ -12,11 +12,20 @@ local ghostStepClock = {}
 -- station it last served so it does not re-trigger on the same one.
 local ghostDwellUntil = {}
 local ghostServed = {}
+-- DPS 2026-09-21: per-train direction sign for ping-pong reversal.
+-- -1 means the train is backing out of a terminus; cleared whenever the entity
+-- is dropped, because a fresh one is always created facing self.direction.
+-- Cannot live on train.private - that is a protected ox_lib class field.
+local reverseSign = {}
 -- Headway holds for GHOST trains, set by server/main.lua's headway pass.
 -- Ghosts used to ignore headway entirely and could advance straight through
 -- the train ahead (typically a dwelling one at a platform), which swapped
 -- running order and permanently paired services.
 local ghostHold = {}
+
+-- Tracks that belong to DPS lines rather than the vanilla network. A train
+-- configured onto one of these never inherits an engine-reported track index.
+local PINNED_TRACKS = { [12] = true, [13] = true, [24] = true }
 
 -- A materialised train pays for every stop twice: the dwell itself plus the
 -- braking ramp in (staged from 500m out) and the acceleration back to line
@@ -34,7 +43,7 @@ local SPEED_ZONES = {
     -- broken. Add ranges back here if per-area speeds are ever wanted.
     [0] = {},
 }
-local OPEN_SPEED = 28.0
+local OPEN_SPEED = 23.1  -- 52 MPH, +15% for the regional line (Damon 2026-09-29); was 20.1 = 45 MPH (was 28 = 62mph, made the mainline haul ass)
 
 function DPS_ZoneSpeed(trackIndex, node, fallback)
     local zones = SPEED_ZONES[trackIndex]
@@ -743,6 +752,21 @@ function Train:Update(time)
         local trackIndex = GetTrainTrackIndex(self.handle)
 
         if trackIndex ~= self.trackIndex then
+            -- DPS 2026-09-21: CREATE_MISSION_TRAIN takes coords but no track
+            -- index, so the engine binds a new train to whatever track is
+            -- NEAREST. At Roxwood Junction our shuttle line (24) passes 6.4m
+            -- from the vanilla main line (0), so the shuttle kept being born on
+            -- - or adopted onto - track 0 and then ran off down the main line as
+            -- a ghost. That is why no Roxwood train ever turned up.
+            -- Our own lines are pinned: drop the mis-bound entity and stay a
+            -- ghost on the configured line instead of inheriting track 0.
+            if PINNED_TRACKS[self.trackIndex] then
+                lib.print.warn(("Train %i is pinned to track %i but the engine bound handle %i to track %i at node %s - dropping the entity, keeping the line"):format(
+                    self.id, self.trackIndex, self.handle, trackIndex, tostring(self.currentNode)))
+                self:Remove()
+                return nil
+            end
+
             lib.print.debug(("Detected track switch, updating track data"))
 
             if not tracks[trackIndex] then
@@ -788,7 +812,7 @@ function Train:Update(time)
 
         -- speed zones: while free-running (no dwell/brake), hold the zone speed
         if not self.isPlayerDriven and not self.private.dwellUntil and not self.private.approachSlow and not self.private.headwayHold then
-            local zoneSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
+            local zoneSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed) * (reverseSign[self.id] or 1)
             if self.private.appliedZoneSpeed ~= zoneSpeed then
                 local zstate = self:getState()
                 if zstate then
@@ -809,8 +833,52 @@ function Train:Update(time)
                     local state = self:getState()
                     if state then
                         if self.doors then state:set("trainDoors", false, true) end
-                        local resumeSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed)
-                        state:set("trainSpeed", resumeSpeed, true)
+                        -- DPS 2026-09-21: reverse at a ping-pong terminus.
+                        --
+                        -- Nothing ever flipped a MATERIALISED train. The
+                        -- ping-pong flip lives in StepNode, which only runs from
+                        -- UpdatePosition - the GHOST path. So after its terminus
+                        -- dwell a materialised train resumed forward speed and
+                        -- drove into the physical end of the rails. The engine
+                        -- clamps the lead car there while the second is still
+                        -- driven, and the second slams into the first hard
+                        -- enough to throw riders out (reported at the LS end of
+                        -- the Roxwood shuttle, track 12 node 335).
+                        --
+                        -- The stock is double-ended metro, so backing out is
+                        -- correct and keeps the entity - riders stay seated,
+                        -- which deleting and respawning the train would not do.
+                        local termNodes = self.track.numNodes or 0
+                        if self.track:isPingPongTrack() and self.currentNode and termNodes > 0
+                            and (self.currentNode >= termNodes - 1 or self.currentNode <= 2) then
+                            self.direction = not self.direction
+                            reverseSign[self.id] = -(reverseSign[self.id] or 1)
+                            lib.print.debug(("Train %i reversing at terminus node %s (track %s)"):format(
+                                self.id, tostring(self.currentNode), tostring(self.trackIndex)))
+                        end
+                        local resumeSpeed = DPS_ZoneSpeed(self.trackIndex, self.currentNode, self.speed) * (reverseSign[self.id] or 1)
+
+                        -- Gentle departure (DPS 2026-09-22, Damon: "it's taking
+                        -- off"). Handing the client line speed the instant the
+                        -- dwell ends makes the train leap away from the
+                        -- platform. Approaches already step down over half a
+                        -- kilometre; this steps UP the same way, so a departure
+                        -- reads like a train pulling out rather than a car
+                        -- launching. Each step re-checks state, because the
+                        -- train can be braking for the next stop or holding for
+                        -- headway by the time a later step fires.
+                        local departId = self.id
+                        for step = 1, 4 do
+                            local frac = step * 0.25
+                            SetTimeout((step - 1) * 2500, function()
+                                if not self.handle or not DoesEntityExist(self.handle) then return end
+                                if self.private.dwellUntil or self.private.approachSlow or self.private.headwayHold then return end
+                                local st = self:getState()
+                                if not st then return end
+                                st:set("trainSpeed", resumeSpeed * frac, true)
+                            end)
+                        end
+
                         state:set("trainState", 0, true)
                         self.private.appliedZoneSpeed = resumeSpeed
                     end
@@ -1044,6 +1112,9 @@ end
 
 function Train:Remove()
     TriggerEvent("Ehbw-Trains:deletedTrainEntity", self.id)
+    -- A replacement entity is always created facing self.direction, so the
+    -- reverse sign must not outlive this one.
+    reverseSign[self.id] = nil
     if self.handle then
         if DeleteTrain then
             DeleteTrain(self.handle)

@@ -106,6 +106,21 @@ end
 
 local activeCreation = nil
 
+-- DPS 2026-09-21: every line this script actually runs, minus the ones config
+-- explicitly disables. Used to enable tracks for CREATE_MISSION_TRAIN below.
+local ourTracks = (function()
+    local disabled = {}
+    for i = 1, #(config.general.disabledTracks or {}) do
+        disabled[config.general.disabledTracks[i]] = true
+    end
+    local list = {}
+    for i = 1, #(config.general.usedTracks or {}) do
+        local t = config.general.usedTracks[i]
+        if not disabled[t] then list[#list + 1] = t end
+    end
+    return list
+end)()
+
 ---Native declaration for CREATE_MISSION_TRAIN providing missing params to ensure the entity is networked
 ---@param variation number
 ---@param coords vector3
@@ -295,7 +310,7 @@ RegisterNetEvent("Ehbw-Trains:createTrainEntity", function (coordinates, data)
     -- native station stops disabled: the game only knows the vanilla power
     -- station stop, which double-stopped trains there. All stops are handled
     -- by the DPS dwell cycle server-side.
-    if false and data.shouldStopAtStations and SetTrainStopAtStations then
+    if data.shouldStopAtStations and SetTrainStopAtStations then
         lib.print.debug("Setting stops at station to true")
         SetTrainStopAtStations(train, true)
     end
@@ -368,8 +383,13 @@ AddStateBagChangeHandler("trainSpeed", nil, function(bagName, _, value)
         end
     end, ("Train took too long to load"), 10000)
 
+    -- DPS 2026-09-21: keep the sign. A negative speed is how a train backs out
+    -- of a ping-pong terminus (server/CTrain.lua). math.abs() here used to strip
+    -- that, so a reversing train was commanded forward into the buffer stop.
+    local speedSign = (value or 0) < 0 and -1 or 1
+
     if not config.general.unlimitSpeed then
-        value = value and math.min(math.abs(value), 30) or 0
+        value = value and speedSign * math.min(math.abs(value), 30) or 0
     end
 
     value = value or 0
@@ -390,8 +410,12 @@ AddStateBagChangeHandler("trainSpeed", nil, function(bagName, _, value)
     -- already brought the train down to ~3 m/s before zero is ever requested.
     SetTrainCruiseSpeed(train, value)
 
-    if value <= 0.5 then
+    if math.abs(value) <= 0.5 then
         SetTrainSpeed(train, 0.0)
+    elseif value < 0 then
+        -- Reversing out of a terminus: a cruise target alone will not start a
+        -- standing train moving backwards, so force the velocity once.
+        SetTrainSpeed(train, value)
     end
 end)
 
@@ -646,12 +670,27 @@ end
         -- So: enable the track for our own trains, switch ambient traffic off. Ambient
         -- trains spawn in both directions and are the head-on collision vector.
         SetRandomTrains(true)
-        if SetTrackEnabled then
-            SetTrackEnabled(0, true)
-            SetTrackEnabled(3, true)
+        -- Only tracks 0 and 3 were enabled here, so CREATE_MISSION_TRAIN had no
+        -- Roxwood line to spawn on: the engine put the shuttle on track 0 instead,
+        -- 370m from its own rails, and the server then adopted that index - the
+        -- reason no Roxwood train ever arrived (Damon, 2026-09-21).
+        -- Enable every line we run, ambient traffic still suppressed per track.
+        for i = 1, #ourTracks do
+            local t = ourTracks[i]
+            -- Only touch tracks the ENGINE actually has. Our custom line does not
+            -- load on this build (see /trackprobe 2026-09-21: 12..31 report 0
+            -- nodes), and calling SET_TRACK_ENABLED on a missing index prints
+            -- "Track Index 12 does not exist" to every client, every second.
+            local exists = true
+            if GetTrackNodeCount then
+                local ok, n = pcall(GetTrackNodeCount, t)
+                exists = ok and n and n > 0
+            end
+            if exists then
+                if SetTrackEnabled then SetTrackEnabled(t, true) end
+                SwitchTrainTrack(t, false)
+            end
         end
-        SwitchTrainTrack(0, false)
-        SwitchTrainTrack(3, false)
         Wait(1000)
     end
 end)
@@ -1092,3 +1131,23 @@ AddEventHandler('onResourceStop', function(resource)
         end
     end
 end)
+
+-- DPS 2026-09-21 diagnostic: which train tracks does the ENGINE actually have?
+-- The Roxwood shuttle keeps being bound to track 0, which means the client has no
+-- usable track for our line. /trackprobe asks the engine directly and reports to
+-- the server console so the answer does not have to be read off an F8 screen.
+RegisterCommand('trackprobe', function()
+    local report = {}
+    for i = 0, 31 do
+        if SetTrackEnabled then SetTrackEnabled(i, true) end
+        local enabled = IsTrackEnabled and IsTrackEnabled(i) or false
+        local nodes = 'n/a'
+        if GetTrackNodeCount then
+            local ok, n = pcall(GetTrackNodeCount, i)
+            if ok and n then nodes = tostring(n) end
+        end
+        report[#report + 1] = ('%d:%s/%s'):format(i, enabled and 'on' or 'off', nodes)
+    end
+    TriggerServerEvent('dps-trains:trackprobe', table.concat(report, ' '))
+    print('^2[trackprobe] sent to server console^7')
+end, false)

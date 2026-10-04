@@ -2254,6 +2254,7 @@ return {
         { coords = vec(-900.2370, -2343.7600, -13.6458), node = 388, side = 1 },
         { coords = vec(-1104.4200, -2728.9900, -9.3241), node = 434, side = 1 },
         { coords = vec(-1067.2300, -2708.1399, -9.3241), node = 530, side = 1 },
+        { coords = vec(-876.2720, -2432.5000, -13.6470), node = 562, side = 1 },  -- Industrial/Docks (platform incoming)
         { coords = vec(-866.5220, -2294.8899, -13.6312), node = 578, side = 1 },
         { coords = vec(-528.6380, -1267.2500, 24.9035), node = 689, side = 1 },
         { coords = vec(284.7580, -1209.9399, 37.1173), node = 782, side = 1 },

@@ -25,6 +25,48 @@ local physHoldState = {}
 -- (DPS_RegulatedDwell) so it applies to ghost and materialised stops alike.
 local headwayState = {}
 
+-- DPS Paleto block (2026-09-21). The Roxwood shuttle (track 24) and the mainline
+-- (track 0) share the last ~620 m of rail into Paleto: measured node by node, the
+-- two track definitions sit 0.0 m apart from track-24 node 414 southward, so they
+-- are the same rails. The headway pass below only compares trains on the SAME
+-- track, so nothing kept these two apart. Treat the station and its approach as
+-- one single-line block: one train inside at a time, first in keeps it, everyone
+-- else holds outside until it clears. Works from either direction, either track.
+local PALETO_BLOCK = vec3(185.08, 6358.74, 30.75)  -- Paleto platform (track 24 node 476)
+local PALETO_IN    = 260.0   -- inside this radius = occupying the block
+local PALETO_WAIT  = 700.0   -- hold out here while the block is taken
+local paletoOwnerId = nil
+
+---Who owns the Paleto block this tick, or nil when it is empty.
+---@param trains table
+---@return number?
+function DPS_UpdatePaletoBlock(trains)
+    local owner, ownerDist
+    for i = 1, #trains do
+        local t = trains[i]
+        if t and t.currentCoords then
+            local d = #(t.currentCoords - PALETO_BLOCK)
+            if d < PALETO_IN then
+                if paletoOwnerId and t.id == paletoOwnerId then
+                    return paletoOwnerId  -- the train already in there keeps it until it leaves
+                end
+                if not ownerDist or d < ownerDist then owner, ownerDist = t.id, d end
+            end
+        end
+    end
+    paletoOwnerId = owner
+    return owner
+end
+
+---True when this train must wait outside the Paleto block.
+---@param train table
+---@param ownerId number?
+---@return boolean
+function DPS_PaletoBlockHold(train, ownerId)
+    if not ownerId or not train or train.id == ownerId or not train.currentCoords then return false end
+    return #(train.currentCoords - PALETO_BLOCK) < PALETO_WAIT
+end
+
 ---@type table<number, CTracks>
 tracks = {}
 ---@type table<number, CTrainE>
@@ -238,10 +280,11 @@ local function iterateTrains()
     -- DPS headway: trains stop at stations now, so a follower on the same track
     -- must hold short instead of rear-ending the train ahead. 40 nodes ~ 300m.
     local HEADWAY_NODES = 40
+    local paletoOwner = DPS_UpdatePaletoBlock(trackingTrains)
     for i=1, #trackingTrains do
         local a = trackingTrains[i]
         if a and a.currentNode and a.private and not a.private.dwellUntil then
-            local blocked = false
+            local blocked = DPS_PaletoBlockHold(a, paletoOwner)
             for j=1, #trackingTrains do
                 local b = trackingTrains[j]
                 if b and j ~= i and b.trackIndex == a.trackIndex and b.currentNode then
@@ -1024,6 +1067,8 @@ local STATION_NAMES = {
         [2434] = 'Davis Interchange (Southbound)',   -- ~400m to the metro's Davis platform
         [2667] = 'Port Depot',
         [2865] = 'Davis Interchange (Northbound)',   -- ~400m to the metro's Davis platform
+        [2357] = 'Downtown LS (Southbound)', [2925] = 'Downtown LS (Northbound)',   -- new stops, Damon 2026-09-29
+        [2792] = 'Market Square',   -- northbound only, Damon 2026-09-29
         [3891] = 'Quarry (Northbound)',
         [4159] = 'Sandy Shores',
     },
@@ -1033,6 +1078,9 @@ local STATION_NAMES = {
         [689] = 'Little Seoul East', [782] = 'Davis', [1078] = 'Burton',
         [1162] = 'Portola Drive',
     },
+    [12] = {  -- Roxwood shuttle. Stops added 2026-09-21 from Damon's F3 marks.
+        [94] = 'LB Bay',
+    },
 }
 local TRAIN_LABELS = {
     metro = { label = 'Metro', color = '#4aa3ff' },
@@ -1041,7 +1089,10 @@ local function trainLabel(train)
     -- Named the way a passenger reads a departure board. Brown Streak Railroad
     -- is the GTA rail company the streak model family is named for; Axsellya
     -- Express is the DPS name for the coaster set.
-    if train.type == 'metro' then return 'Metro', '#4aa3ff' end
+    -- DPS 2026-09-29: name the SERVICE. Every train is spawned as type 'metro',
+    -- so the track tells them apart: track 0 is the regional line.
+    if train.trackIndex == 0 then return 'Regional Train', '#3ad06a' end
+    if train.type == 'metro' then return 'Light Rail', '#4aa3ff' end
     if train.variation == 28 then return 'Axsellya Express', '#3ad06a' end
     if train.variation == 29 then return 'Brown Streak', '#e8d24a' end
     return 'Freight', '#f08a3c'
@@ -1180,3 +1231,10 @@ RegisterCommand('boarddebug', function(src)
     for _, e in ipairs(board) do if #e.arrivals > 0 then withArr = withArr + 1 end end
     print(('[boarddebug] board entries = %d, with arrivals = %d'):format(#board, withArr))
 end, true)
+
+
+-- DPS 2026-09-21 diagnostic: receives /trackprobe from a client and prints the
+-- engine's own track list, so we can see whether the Roxwood line exists at all.
+RegisterNetEvent('dps-trains:trackprobe', function(report)
+    print(('[trackprobe] from %s (%s): %s'):format(source, GetPlayerName(source) or '?', report))
+end)

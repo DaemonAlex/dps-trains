@@ -58,7 +58,7 @@ config.unlimitSpeed = false
 config.disabledTracks = {1, 2, 4, 5, 6, 7, 8, 9, 10, 11}
 
 -- Tracks that used be used for the server, used with getClosestTrackAndNode exports
-config.usedTracks = {0, 3}
+config.usedTracks = {0, 1, 3, 12}  -- 12 = Roxwood passenger line (trains14.dat). TRAINTRACKS_FILE appends to the vanilla 0-11, and our XML now declares one entry, so the shuttle is runtime track 12 (2026-09-21). Cable car 12/13 tables moved to backups; cablecar is disabled.
 
 -- Allows players to drive trains. By default all trains can be driven (metro and freight), however this can be changed.
 config.enablePlayerDriving = true
@@ -161,7 +161,7 @@ config.showTrainBlips = false  -- DPS: map decluttered; station blips (short-ran
 --- up to speed between them. Quarry is kept; it is also served on the return
 --- leg at node 3891.
 config.skipStations = {
-    [0] = { [1555] = true },   -- Wind Farm
+    [0] = { [1555] = true, [2434] = true, [2865] = true },   -- Wind Farm; Downtown (Davis Interchange) both passes, deleted by Damon 2026-09-29
 }
 
 config.stationDwellTime = 30000
@@ -200,11 +200,14 @@ config.deleteDistance = 500.0
 --- The default speed of metro and trains, between 0 - 30
 --- Trains cannot have a negative speed without having a negative effect for remote (other) players
 --- Trains also cannot have a speed above 30 without potentially desynchronizing between clients (as 30.f is the max cruiseSpeed value in CTrainGameStateDataNode)
-config.defaultSpeed = 30  -- m/s (~67mph). This is the HARD ceiling: 30.0 is the max
--- cruiseSpeed representable in CTrainGameStateDataNode, so anything above it
--- desyncs trains between clients regardless of unlimitSpeed. server/main.lua
--- reads THIS value (freight.speed or config.general.defaultSpeed), NOT
--- config.freight.speed - setting that one has no effect.
+config.defaultSpeed = 20.1  -- m/s (~45mph). Line speed for metro, freight and
+-- cable car alike: every spawn in server/main.lua reads a per-start-location
+-- speed field first and falls back to this, and no start location defines one,
+-- so this single value sets every train on the map.
+-- 30.0 is the HARD ceiling - the max cruiseSpeed representable in
+-- CTrainGameStateDataNode - so anything above it desyncs trains between clients
+-- regardless of unlimitSpeed. NOTE: config.freight.speed is NOT this value and
+-- has no effect; main.lua's `freight` is a startLocations entry, not the table.
 
 --- Candidate Selection options (only used when server-setters are disabled)
 --- Should the best candidate (those within config.recreateTrainDistance or 424.0 units of the trains respawn location)

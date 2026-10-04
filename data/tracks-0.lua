@@ -4230,14 +4230,18 @@ return {
         vec(1084.4800, 3231.4500, 39.2565),
     },
     stations = {
+        { coords = vec(784.8500, 6437.4200, 31.1600), node = 724, side = 1 },  -- Roxwood Junction interchange (2026-09-21, Damon's coords)
         { coords = vec(-446.8200, 5362.5098, 80.6654), node = 462, side = 1 },  -- Lumber Mill
-        { coords = vec(111.8490, 6317.6001, 30.6872), node = 651, side = 1 },  -- Paleto Bay
-        { coords = vec(2599.3000, 2912.5701, 38.5686), node = 1481, side = 1 },  -- Quarry (northbound)
+        { coords = vec(183.5400, 6357.5900, 31.7200), node = 659, side = 1 },  -- Paleto Bay (Damon platform)
+        { coords = vec(2610.6600, 2928.0400, 39.8400), node = 1464, side = 1 },  -- Quarry northbound (Damon platform)
         { coords = vec(2450.2700, 2482.3501, 41.0655), node = 1555, side = 1 },  -- Wind Farm
         { coords = vec(2610.9900, 1649.7100, 26.6153), node = 1701, side = 1 },  -- Power Plant
         { coords = vec(669.2730, -1104.7900, 22.7443), node = 2434, side = 1 },  -- Downtown (northbound pass)
         { coords = vec(217.4270, -2436.6299, 6.2090), node = 2667, side = 1 },  -- Port Depot
         { coords = vec(669.2730, -1104.7900, 22.7443), node = 2865, side = 1 },  -- Downtown (return pass)
+        { coords = vec(680.0700, -617.9800, 25.5000), node = 2357, side = 1 },  -- Downtown LS southbound (Damon engine stop point, 2026-09-29)
+        { coords = vec(735.2400, -524.6300, 27.1000), node = 2925, side = 1 },  -- Downtown LS northbound (Damon engine stop point, 2026-09-29)
+        { coords = vec(553.8200, -1441.3700, 21.7800), node = 2792, side = 0 },  -- Market Square, northbound only, doors LEFT (Damon engine stop point, 2026-09-29)
         { coords = vec(2599.3000, 2912.5701, 38.5686), node = 3891, side = 1 },  -- Quarry (return pass)
         { coords = vec(1870.6700, 3544.5901, 37.6682), node = 4159, side = 1 },  -- Sandy Shores Train Depot
     }

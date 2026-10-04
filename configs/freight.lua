@@ -1,7 +1,7 @@
 local config = {}
 
 --- Freight trains
-config.enabled = true
+config.enabled = false  -- docks land on track 0 (mainline); need real dock siding track
 
 -- Can players drive freight trains (required enablePlayingDriving to be enabled in general.lua)
 config.enablePlayerDriving = true
@@ -71,12 +71,11 @@ config.startLocations = {
     --     fleet self-spaces continuously, not just when someone is watching.
     -- Check the line's health any time with `traindebug` in the server
     -- console: the per-track gap table should sit near the ideal (704 here).
-    {node = 1,    direction = true, variation = 28, doors = true},   -- Axsellya Express   -- Axsellya Express
-    {node = 705,  direction = true, variation = 29, doors = true},   -- Brown Streak
-    {node = 1409, direction = true, variation = 28, doors = true},   -- Axsellya Express
-    {node = 2113, direction = true, variation = 29, doors = true},   -- Brown Streak
-    {node = 2817, direction = true, variation = 28, doors = true},   -- Axsellya Express
-    {node = 3521, direction = true, variation = 29, doors = true},   -- Brown Streak
+    -- DOCK FREIGHT: default consist (variation 0), slow (10 mph = ~4.5 m/s), no passenger doors.
+    {coords = vec3(692.36, -2678.37, 10.76), direction = true, variation = 0, speed = 4.5, doors = false}, -- dock route 1 A
+    {coords = vec3(-8.09, -2582.12, 6.01),  direction = true, variation = 0, speed = 4.5, doors = false}, -- dock route 1 B
+    {coords = vec3(877.39, -3248.93, 5.88), direction = true, variation = 0, speed = 4.5, doors = false}, -- dock route 2 A
+    {coords = vec3(221.80, -2818.49, 6.10), direction = true, variation = 0, speed = 4.5, doors = false}, -- dock route 2 B
 }
 
 

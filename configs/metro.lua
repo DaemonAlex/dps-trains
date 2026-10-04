@@ -8,7 +8,7 @@ config.enabled = true
 config.enablePlayerDriving = true
 
 --- How many metrotrains can run at once
-config.count = 3
+config.count = 20
 
 --- Should the metro train have a blip on the map
 config.showTrainBlips = false  -- DPS: no map blips; the Transit app is the source of truth
@@ -42,9 +42,25 @@ config.startLocations = {
     -- Both stock spawns sat ~20m apart at Davis, which starts the line bunched.
     -- These are evenly spaced by node index around track 3 (2244 nodes) via
     -- /trainspace 3 3, so the subway runs a real headway from the first lap.
-    {coords = vec3(193.196, -603.836, 16.756), direction = true},    -- node 1
-    {coords = vec3(-174.688, -1217.670, 36.550), direction = true},  -- node 749
-    {coords = vec3(-2.146, -1630.470, 28.304), direction = true},    -- node 1497
+    --
+    -- Four trains as of 2026-08-30: quarters are 561 nodes apart, so the whole
+    -- set moved rather than squeezing a fourth into an existing gap. Keeping the
+    -- spacing exact is what stops the line bunching after a lap or two.
+    -- speed is set per train here because config.general.defaultSpeed is 20.1
+    -- (45 mph) for the surface lines; the subway runs at the 30 m/s ceiling.
+    {coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},    -- node 1
+    {coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- metro 2 (node 749)
+    {coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- metro 3 (node 1497)
+    -- Mainline = Roxwood regional passenger since 2026-09-15 (variation 32 on build 3095 = rox_passenger_config01, see data/trains.lua).
+    {index = 0, variation = 32, coords = vec3(1084.480, 3231.450, 39.256), direction = true, speed = 23.1},  -- MAINLINE regional 1 (track 0)
+    {index = 0, variation = 32, coords = vec3(2811.730, 3256.310, 49.762), direction = true, speed = 23.1},  -- MAINLINE regional 2 (track 0)
+    {index = 0, variation = 32, coords = vec3(627.972, -1309.900, 20.642), direction = true, speed = 23.1},  -- MAINLINE regional 3 (track 0)
+    -- Roxwood passenger line (track 24). Consist 29 = passenger_config02, OUR Brown Streak set (streak + streakcoastercab); the Roxwood models are escrow-encrypted and cannot leave their resource.
+    -- Line from south LS to Roxwood, ping-pong. Start points from /trainspace 24 2 (2900 nodes, step 1450). Added 2026-09-05.
+    -- UNPARKED 2026-09-21 07:50: /trackprobe now reports 12:on/415, so the line really is in the engine (it never was as 'track 24' - see fxmanifest TRAINTRACK_FILE fix in dps-traintracks).
+    {index = 12, variation = 31, coords = vec3(-483.949, 7657.527, 5.363), direction = true, speed = 14.0},  -- ROXWOOD shuttle spawns AT Roxwood station, now node 1 of the cut line: METRO stock (metro_config01 = 2x metrotrain, second flipped) per Damon 2026-09-21 - a single-ended loco shoving its coaches backwards on the return leg looked wrong; metro is double-ended. (node 1, ROXWOOD end) - Damon's pick: starts at Roxwood, reaches the junction ~2.5 min after a boot.
+    -- SINGLE-TRACK SHUTTLE: only one train on the Roxwood line (2026-09-21). Old second spawn:
+    -- {index = 24, variation = 32, coords = vec3(2687.050, 3055.110, 41.156), direction = true, speed = 20.1},   -- ROXWOOD line 2 (node 1451, Grand Senora)  ON 2026-09-21 (rox_passenger_config01 = 32)
 }
 
 
@@ -57,22 +73,32 @@ config.npcModel = `S_M_M_LSMetro_01`
 config.seatAnimDict = "amb@prop_human_seat_chair_mp@male@generic@base"
 config.seatAnimName = "base"
 
+-- Seat map rebuilt 2026-09-22 (Damon: "the seating map is all messed up").
+-- The old list was 15 seats crammed into a 7m stretch - it covered about a
+-- third of the car, so riders bunched in the middle and anyone boarding at an
+-- end door was nowhere near a seat. A metrotrain car is roughly 18m, so this
+-- runs 9 rows down both walls at 1.6m spacing, facing inward like the old
+-- entries did. If any land in a wall, stand on the right spot and run
+-- /seatmark - it prints the exact offset to paste in here.
 config.seatOffsets = {
-    vec4(-0.886257, 2.306824, 1.0, 269.807465),
-    vec4(0.901825, 2.144073, 1.0, 90.463196),
-    vec4(-0.897377, 1.445557, 1.0, 271.888855),
-    vec4(0.812458, 1.499298, 1.0, 89.758827),
-    vec4(-0.957165, 0.527008, 1.0, 272.062347),
-    vec4(0.915848, 0.772308, 1.0, 89.411926),
-    vec4(0.818874, -0.006226, 1.0, 90.799545),
-    vec4(-0.825672, -0.976959, 1.0, 271.097748),
-    vec4(0.870419, -0.776703, 1.0, 90.712807),
-    vec4(-0.926239, -1.626373, 1.0, 269.796875),
-    vec4(0.813835, -1.547729, 1.0,  88.794296),
-    vec4(-0.925842, -3.851990, 1.0, 266.057251),
-    vec4(0.832500, -3.824921, 1.0, 88.967751),
-    vec4(-0.905621, -4.834839, 1.0, 269.786377),
-    vec4(0.863285, -4.728607, 1.0, 90.615524)
+    vec4(-0.92, 6.40, 1.0, 270.0),
+    vec4( 0.92, 6.40, 1.0,  90.0),
+    vec4(-0.92, 4.80, 1.0, 270.0),
+    vec4( 0.92, 4.80, 1.0,  90.0),
+    vec4(-0.92, 3.20, 1.0, 270.0),
+    vec4( 0.92, 3.20, 1.0,  90.0),
+    vec4(-0.92, 1.60, 1.0, 270.0),
+    vec4( 0.92, 1.60, 1.0,  90.0),
+    vec4(-0.92, 0.00, 1.0, 270.0),
+    vec4( 0.92, 0.00, 1.0,  90.0),
+    vec4(-0.92, -1.60, 1.0, 270.0),
+    vec4( 0.92, -1.60, 1.0,  90.0),
+    vec4(-0.92, -3.20, 1.0, 270.0),
+    vec4( 0.92, -3.20, 1.0,  90.0),
+    vec4(-0.92, -4.80, 1.0, 270.0),
+    vec4( 0.92, -4.80, 1.0,  90.0),
+    vec4(-0.92, -6.40, 1.0, 270.0),
+    vec4( 0.92, -6.40, 1.0,  90.0),
 }
 
 config.seatResetCoords = {
