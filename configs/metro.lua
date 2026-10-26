@@ -51,14 +51,14 @@ config.startLocations = {
     {coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},    -- node 1
     {coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- metro 2 (node 749)
     {coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- metro 3 (node 1497)
-    -- Mainline = Roxwood regional passenger since 2026-09-15 (variation 32 on build 3095 = rox_passenger_config01, see data/trains.lua).
-    {index = 0, variation = 32, coords = vec3(1084.480, 3231.450, 39.256), direction = true, speed = 23.1},  -- MAINLINE regional 1 (track 0)
-    {index = 0, variation = 32, coords = vec3(2811.730, 3256.310, 49.762), direction = true, speed = 23.1},  -- MAINLINE regional 2 (track 0)
-    {index = 0, variation = 32, coords = vec3(627.972, -1309.900, 20.642), direction = true, speed = 23.1},  -- MAINLINE regional 3 (track 0)
+    -- Mainline = Roxwood regional passenger since 2026-09-15 (variation 33 on build 3889, was 32 on 3095 = rox_passenger_config01, see data/trains.lua).
+    {index = 0, variation = 33, coords = vec3(1084.480, 3231.450, 39.256), direction = true, speed = 23.1},  -- MAINLINE regional 1 (track 0)
+    {index = 0, variation = 33, coords = vec3(2811.730, 3256.310, 49.762), direction = true, speed = 23.1},  -- MAINLINE regional 2 (track 0)
+    {index = 0, variation = 33, coords = vec3(627.972, -1309.900, 20.642), direction = true, speed = 23.1},  -- MAINLINE regional 3 (track 0)
     -- Roxwood passenger line (track 24). Consist 29 = passenger_config02, OUR Brown Streak set (streak + streakcoastercab); the Roxwood models are escrow-encrypted and cannot leave their resource.
     -- Line from south LS to Roxwood, ping-pong. Start points from /trainspace 24 2 (2900 nodes, step 1450). Added 2026-09-05.
     -- UNPARKED 2026-09-21 07:50: /trackprobe now reports 12:on/415, so the line really is in the engine (it never was as 'track 24' - see fxmanifest TRAINTRACK_FILE fix in dps-traintracks).
-    {index = 12, variation = 31, coords = vec3(-483.949, 7657.527, 5.363), direction = true, speed = 14.0},  -- ROXWOOD shuttle spawns AT Roxwood station, now node 1 of the cut line: METRO stock (metro_config01 = 2x metrotrain, second flipped) per Damon 2026-09-21 - a single-ended loco shoving its coaches backwards on the return leg looked wrong; metro is double-ended. (node 1, ROXWOOD end) - Damon's pick: starts at Roxwood, reaches the junction ~2.5 min after a boot.
+    {index = 12, variation = 32, coords = vec3(-483.949, 7657.527, 5.363), direction = true, speed = 14.0},  -- ROXWOOD shuttle spawns AT Roxwood station, now node 1 of the cut line: METRO stock (metro_config01 = 2x metrotrain, second flipped) per Damon 2026-09-21 - a single-ended loco shoving its coaches backwards on the return leg looked wrong; metro is double-ended. (node 1, ROXWOOD end) - Damon's pick: starts at Roxwood, reaches the junction ~2.5 min after a boot.
     -- SINGLE-TRACK SHUTTLE: only one train on the Roxwood line (2026-09-21). Old second spawn:
     -- {index = 24, variation = 32, coords = vec3(2687.050, 3055.110, 41.156), direction = true, speed = 20.1},   -- ROXWOOD line 2 (node 1451, Grand Senora)  ON 2026-09-21 (rox_passenger_config01 = 32)
 }
