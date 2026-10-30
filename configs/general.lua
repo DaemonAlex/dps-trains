@@ -58,7 +58,7 @@ config.unlimitSpeed = false
 config.disabledTracks = {1, 2, 4, 5, 6, 7, 8, 9, 10, 11}
 
 -- Tracks that used be used for the server, used with getClosestTrackAndNode exports
-config.usedTracks = {0, 1, 3, 12}  -- 12 = Roxwood passenger line (trains14.dat). TRAINTRACKS_FILE appends to the vanilla 0-11, and our XML now declares one entry, so the shuttle is runtime track 12 (2026-09-21). Cable car 12/13 tables moved to backups; cablecar is disabled.
+config.usedTracks = {0, 1, 3}  -- DPS 2026-10-29: 12 (Roxwood line) dropped, Roxwood is gone;  -- 12 = Roxwood passenger line (trains14.dat). TRAINTRACKS_FILE appends to the vanilla 0-11, and our XML now declares one entry, so the shuttle is runtime track 12 (2026-09-21). Cable car 12/13 tables moved to backups; cablecar is disabled.
 
 -- Allows players to drive trains. By default all trains can be driven (metro and freight), however this can be changed.
 config.enablePlayerDriving = true
