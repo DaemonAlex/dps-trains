@@ -48,10 +48,10 @@ config.startLocations = {
     -- spacing exact is what stops the line bunching after a lap or two.
     -- speed is set per train here because config.general.defaultSpeed is 20.1
     -- (45 mph) for the surface lines; the subway runs at the 30 m/s ceiling.
-    -- DPS 2026-10-29 (Damon: nicer light rail): the downtown metro runs the Flexity tram, variation 33 = lrt_config01 in dps-trains-stock (build 3095).
-    {variation = 33, coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},    -- node 1
-    {variation = 33, coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- metro 2 (node 749)
-    {variation = 33, coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- metro 3 (node 1497)
+    -- DPS 2026-10-29 (Damon: nicer light rail): the downtown metro runs the Flexity tram, variation 34 = lrt_config01 on build 3570 (was 33 on 3095; build 3407 added a vanilla config) in dps-trains-stock (build 3095).
+    {variation = 34, coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},    -- node 1
+    {variation = 34, coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- metro 2 (node 749)
+    {variation = 34, coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- metro 3 (node 1497)
     -- Mainline = Roxwood regional passenger since 2026-09-15 (variation 33 on build 3889, was 32 on 3095 = rox_passenger_config01, see data/trains.lua).
     {index = 0, variation = 28, coords = vec3(1084.480, 3231.450, 39.256), direction = true, speed = 23.1},  -- DPS 2026-10-29: Roxwood gone, consist 28 = passenger_config01 on build 3095 (streakcoaster + streakc + streakcab). MAINLINE regional 1 (track 0)
     {index = 0, variation = 28, coords = vec3(2811.730, 3256.310, 49.762), direction = true, speed = 23.1},  -- DPS 2026-10-29: Roxwood gone, consist 28 = passenger_config01 on build 3095 (streakcoaster + streakc + streakcab). MAINLINE regional 2 (track 0)
