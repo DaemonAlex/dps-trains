@@ -18,10 +18,13 @@ dependencies
 
 shared_script '@ox_lib/init.lua'
 
+shared_script 'shared/stations.lua'  -- DPS 2026-10-31: one station list for both the client's proximity test and the server's names, so they cannot drift apart
+
 client_scripts {
     'client/main.lua',
     'client/stationblips.lua',  -- DPS: small short-range STOP blips only; no moving vehicle blips
-    'client/drive.lua'
+    'client/drive.lua',
+    'client/announce.lua'   -- DPS 2026-10-31: metro station announcements, spoken through dps-voice
 }
 
 files {
@@ -38,7 +41,8 @@ server_scripts
     'server/CTrain.lua',
     'server/main.lua',
     'server/parser/tracks.lua',
-    'server/parser/trains.lua'
+    'server/parser/trains.lua',
+    'server/announce.lua'   -- DPS 2026-10-31: turns a station number into one spoken line
 }
 
 escrow_ignore

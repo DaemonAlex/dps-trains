@@ -38,6 +38,35 @@ config.trainBlipShortRange = false
 config.shouldStopAtStations = true
 
 -- This can either be the track node or a rough coordinate to the node
+--- 24 is the index in 1604. Future gamebuilds add variations before the metro train so we just increment it
+local metroVariation = 24
+
+if gameBuild >= 2372 then
+    metroVariation += 1
+end
+
+if gameBuild >= 2802 then
+    metroVariation += 1
+end
+
+if gameBuild >= 3095 then
+    metroVariation += 1
+end
+
+if gameBuild >= 3407 then
+    metroVariation += 1
+end
+
+--- Which consist each line runs.
+---
+--- Vanilla consists come first and end at the metro; ours are appended after it.
+--- So every number here is written as an offset from the metro rather than typed
+--- in by hand: when a game build inserts another vanilla consist, metroVariation
+--- moves and ours move with it, instead of all of them going stale at once.
+--- (31 Oct: hardcoded numbers did exactly that after a build change.)
+local VANILLA_METRO = metroVariation       -- the yellow Los Santos metro
+local LRT_TRAM      = metroVariation + 5   -- lrt_config01, the Flexity tram
+
 config.startLocations = {
     -- Both stock spawns sat ~20m apart at Davis, which starts the line bunched.
     -- These are evenly spaced by node index around track 3 (2244 nodes) via
@@ -48,20 +77,14 @@ config.startLocations = {
     -- spacing exact is what stops the line bunching after a lap or two.
     -- speed is set per train here because config.general.defaultSpeed is 20.1
     -- (45 mph) for the surface lines; the subway runs at the 30 m/s ceiling.
-    -- DPS 2026-10-29 (Damon: nicer light rail): the downtown metro runs the Flexity tram, variation 34 = lrt_config01 on build 3570 (was 33 on 3095; build 3407 added a vanilla config) in dps-trains-stock (build 3095).
-    {variation = 34, coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},    -- node 1
-    {variation = 34, coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- metro 2 (node 749)
-    {variation = 34, coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- metro 3 (node 1497)
-    -- Mainline = Roxwood regional passenger since 2026-09-15 (variation 33 on build 3889, was 32 on 3095 = rox_passenger_config01, see data/trains.lua).
-    {index = 0, variation = 28, coords = vec3(1084.480, 3231.450, 39.256), direction = true, speed = 23.1},  -- DPS 2026-10-29: Roxwood gone, consist 28 = passenger_config01 on build 3095 (streakcoaster + streakc + streakcab). MAINLINE regional 1 (track 0)
-    {index = 0, variation = 28, coords = vec3(2811.730, 3256.310, 49.762), direction = true, speed = 23.1},  -- DPS 2026-10-29: Roxwood gone, consist 28 = passenger_config01 on build 3095 (streakcoaster + streakc + streakcab). MAINLINE regional 2 (track 0)
-    {index = 0, variation = 28, coords = vec3(627.972, -1309.900, 20.642), direction = true, speed = 23.1},  -- DPS 2026-10-29: Roxwood gone, consist 28 = passenger_config01 on build 3095 (streakcoaster + streakc + streakcab). MAINLINE regional 3 (track 0)
-    -- Roxwood passenger line (track 24). Consist 29 = passenger_config02, OUR Brown Streak set (streak + streakcoastercab); the Roxwood models are escrow-encrypted and cannot leave their resource.
-    -- Line from south LS to Roxwood, ping-pong. Start points from /trainspace 24 2 (2900 nodes, step 1450). Added 2026-09-05.
-    -- UNPARKED 2026-09-21 07:50: /trackprobe now reports 12:on/415, so the line really is in the engine (it never was as 'track 24' - see fxmanifest TRAINTRACK_FILE fix in dps-traintracks).
-    -- OFF 2026-10-29 (Damon: Roxwood is gone): {index = 12, variation = 32, coords = vec3(-483.949, 7657.527, 5.363), direction = true, speed = 14.0},  -- ROXWOOD shuttle spawns AT Roxwood station, now node 1 of the cut line: METRO stock (metro_config01 = 2x metrotrain, second flipped) per Damon 2026-09-21 - a single-ended loco shoving its coaches backwards on the return leg looked wrong; metro is double-ended. (node 1, ROXWOOD end) - Damon's pick: starts at Roxwood, reaches the junction ~2.5 min after a boot.
-    -- SINGLE-TRACK SHUTTLE: only one train on the Roxwood line (2026-09-21). Old second spawn:
-    -- {index = 24, variation = 32, coords = vec3(2687.050, 3055.110, 41.156), direction = true, speed = 20.1},   -- ROXWOOD line 2 (node 1451, Grand Senora)  ON 2026-09-21 (rox_passenger_config01 = 32)
+    -- LIGHT RAIL (track 3) runs the yellow Los Santos metro, the one Damon saw on the main track (31 Oct).
+    {variation = VANILLA_METRO, coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
+    {variation = VANILLA_METRO, coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
+    {variation = VANILLA_METRO, coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
+    -- COUNTRY MAINLINE (track 0). Was the Roxwood regional, which is gone; it runs the Flexity tram now (Damon 31 Oct).
+    {index = 0, variation = LRT_TRAM, coords = vec3(1084.480, 3231.450, 39.256), direction = true, speed = 23.1},  -- COUNTRY MAINLINE (track 0): the Flexity tram, the repainted one.
+    {index = 0, variation = LRT_TRAM, coords = vec3(2811.730, 3256.310, 49.762), direction = true, speed = 23.1},  -- COUNTRY MAINLINE (track 0): the Flexity tram, the repainted one.
+    {index = 0, variation = LRT_TRAM, coords = vec3(627.972, -1309.900, 20.642), direction = true, speed = 23.1},  -- COUNTRY MAINLINE (track 0): the Flexity tram, the repainted one.
 }
 
 
@@ -131,24 +154,6 @@ config.seatResetCoords = {
 --- Set's the track index used for metros defined in config.metro.startLocations
 config.trackIndex = 3
 
---- 24 is the index in 1604. Future gamebuilds add variations before the metro train so we just increment it
-local metroVariation = 24
-
-if gameBuild >= 2372 then
-    metroVariation += 1
-end
-
-if gameBuild >= 2802 then
-    metroVariation += 1
-end
-
-if gameBuild >= 3095 then
-    metroVariation += 1
-end
-
-if gameBuild >= 3407 then
-    metroVariation += 1
-end
 
 --- The Metro train config variation. This can vary between gamebuilds or if trains.xml is modified.
 --- Be aware, putting an invalid variation index will crash clients if not on canary.
