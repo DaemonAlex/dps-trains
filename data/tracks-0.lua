@@ -4230,7 +4230,6 @@ return {
         vec(1084.4800, 3231.4500, 39.2565),
     },
     stations = {
-        { coords = vec(784.8500, 6437.4200, 31.1600), node = 724, side = 1 },  -- Roxwood Junction interchange (2026-09-21, Damon's coords)
         { coords = vec(-446.8200, 5362.5098, 80.6654), node = 462, side = 1 },  -- Lumber Mill
         { coords = vec(183.5400, 6357.5900, 31.7200), node = 659, side = 1 },  -- Paleto Bay (Damon platform)
         { coords = vec(2610.6600, 2928.0400, 39.8400), node = 1464, side = 1 },  -- Quarry northbound (Damon platform)

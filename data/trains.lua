@@ -40,19 +40,8 @@ return {
    },
   },
   {
-   -- Roxwood regional passenger (2026-09-15). The models stream from
-   -- [maps]/[roxwood-county]/amb-roxwood-trains (escrowed); the consist is
-   -- defined in dps-trains-stock as the fifth appended consist.
-   index = 32,   -- rox_passenger_config01
-   models = {
-    `amb_statrac_loc`,
-    `streakc`,
-    `streakcab`,
-   },
-  },
-  {
    -- DPS 2026-10-29: Bombardier Flexity tram, lrt_config01 in dps-trains-stock (models in [vehicles]/elrt-tram).
-   index = 33,   -- lrt_config01
+   index = 32,   -- lrt_config01 (was 33: the Roxwood consist above it was removed 31 Oct)
    models = {
     `elrtcab`,
     `elrtpassenger`,
