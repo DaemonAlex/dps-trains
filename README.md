@@ -9,6 +9,13 @@ Forked from [Ehbw-Trains](https://github.com/Ehbw) and substantially rewritten.
 Credit to the upstream author for the track-node architecture and train
 tracking that everything here is built on.
 
+## What it is for
+
+GTA trains in FiveM are scenery. They pass at random, they do not stop for you,
+and nobody can say when the next one comes. This script turns them into public
+transport. Trains run to a timetable, stop at every station, open their doors
+and wait. A player can plan a trip across the map without a car.
+
 ## The four resources
 
 The railway is four resources with one job each. Only `dps-trains` and
@@ -28,6 +35,59 @@ dps-trains         engine      scheduling, movement, station stops   <- you are 
 | `dps-trains` | `ox_lib`, `dps-trains-stock` | yes, but with no custom rolling stock |
 | `dps-traintools` | `ox_lib` | yes — it works on any train entity, vanilla included |
 | `dps-transitapp` | `lb-phone`, `ox_lib`, `dps-trains` | no — it is a view of `getArrivalBoard` |
+
+There is a fifth, small one: `dps-traintracks`. It holds extra track data and
+has no scripts. See below.
+
+## On its own, and with other scripts
+
+**On its own.** With `ox_lib` and `dps-trains-stock` you get the whole service.
+Light rail trains run on the city line and trains run on the country mainline.
+They stop at stations, open their doors, and carry an NPC driver. Small station
+blips show on the map. Staff get `traindebug`, `boarddebug` and `trainspace` in
+the server console.
+
+**With a paid train pack (BigDaddy Trains Overhauled).** `dps-trains-stock` is
+the models and carriage sets from that pack, with the pack's own scripts taken
+out. dps-trains only asks the game for a carriage set by number. It calls no
+code from the pack. When the pack updates its models, copy the new files into
+`dps-trains-stock`. The engine keeps working as long as the carriage sets stay
+in the same order in `data/trains.xml`.
+
+**With dps-traintools.** Players get an "[E] Board Train" prompt at stations, a
+seat on the carriage, and NPC passengers in the coaches. dps-traintools does
+not call dps-trains. It works on any train it can see, so you can restart it
+without resetting the trains.
+
+**With a paid phone (lb-phone) and dps-transitapp.** Players get a Transit app
+with live arrival times for every station. The app reads one export from this
+script, `getArrivalBoard`. dps-trains never calls lb-phone, so a phone update
+cannot break the trains.
+
+**With dps-voice.** A rider hears "Next station, Davis" and "Now arriving at
+Davis". Only the rider hears it. dps-trains sends the line to `dps-voice`
+through its `Say` export. Without dps-voice there is no announcement, and the
+server console logs an export error each time one is asked for.
+
+**With ox_target.** The third eye shows "drive train" at the cab and "sit" in a
+metro carriage. The bridge in `client/bridge/ox_target.lua` loads only when
+`ox_target` is started.
+
+**With a paid cable car (rtx_cablecar).** The game counts a cable car as a
+train, and dps-trains deletes trains it did not create. The `cablecar` model
+and the `rtx_cablecar` resource are on a protected list in
+`configs/general.lua`, so the cable car is left alone. dps-trains calls nothing
+in that script.
+
+**With dps-traintracks.** That resource adds one extra track to the game.
+dps-trains can run trains on it when the track number is in
+`config.usedTracks`. Since 29 October 2026 it is not in the list, so no train
+runs there now.
+
+**How the rail scripts fit together.** `dps-trains-stock` says what a train is
+made of. `dps-traintracks` adds track. `dps-trains` moves the trains and stops
+them at stations. `dps-traintools` puts players on board. `dps-transitapp`
+shows arrival times on the phone.
 
 ## Requirements
 
@@ -64,10 +124,12 @@ are therefore created by nearby clients; see [How a train actually works](#how-a
    order already puts `dps-trains` before `dps-trains-stock` — which is the wrong
    way round. Start them explicitly.
 
-3. **Check the consist indices line up.** `configs/freight.lua` references
+3. **Check the consist indices line up.** `configs/metro.lua` references
    variations by number, and those numbers come from
    `dps-trains-stock/data/trains.xml`. An index the game does not have **crashes
-   clients**. Defaults are 28 Axsellya, 29 Brown Streak, 31 metro.
+   clients**. The file works the numbers out from the game build: first the
+   vanilla metro, then the custom sets counted on from it. If you add or remove
+   a set in `trains.xml`, change the offsets at the top of `startLocations`.
 
 4. **Reboot and rejoin.** Consist data is ingested by the client at join —
    resource restarts do not reload it.
@@ -80,49 +142,53 @@ are therefore created by nearby clients; see [How a train actually works](#how-a
 
 | File | What it controls |
 |---|---|
-| `configs/freight.lua` | mainline trains: how many, where they start, which consist |
-| `configs/metro.lua` | metro trains |
+| `configs/metro.lua` | every running train: where it starts, which consist, which track. An entry with `index = 0` runs on the country mainline. The rest run on the light rail (track 3). |
+| `configs/freight.lua` | freight trains. Off (`config.enabled = false`). |
 | `configs/general.lua` | line speed, dwell time, skipped stations, model preload list |
 | `server/main.lua` | station names, keyed by node |
 
-Start locations are **node indices**, not coordinates — `CTrain` derives the
-position from the node, so spacing is exact. Use `trainspace <track> <count>` to
-generate evenly spaced ones.
+A start location is a coordinate (`coords`) or a node index (`node`). The train
+snaps to the nearest track node, so spacing is exact. Use
+`trainspace <track> <count>` to generate evenly spaced ones.
 
-To change the number of trains, edit both `config.count` and `startLocations` in
-`configs/freight.lua`; they must agree.
+To change the number of trains, edit `startLocations` in `configs/metro.lua`.
+`config.count` is the upper limit. It must not be lower than the number of
+entries.
 
 ## Service
 
 | | |
 |---|---|
-| **Mainline** (track 0) | 6 passenger trains, spaced 704 nodes apart |
-| **Metro** (track 3) | 3 trains |
-| **Consists** | engine + 3 carriages |
-| **Line speed** | 30 m/s (~67 mph) |
+| **Country mainline** (track 0) | 3 trains, the tram set (`lrt_config01` in `dps-trains-stock`), 23.1 m/s (~52 mph) |
+| **Light rail** (track 3) | 3 trains, the yellow Los Santos metro (vanilla), 20.1 m/s (~45 mph) |
+| **Freight** | off |
+| **Speed ceiling** | 30 m/s (~67 mph) |
 | **Station dwell** | 30 s |
-| **Calling points** | 9 on the mainline |
-| **Headway** | ~3.5 minutes |
+| **Calling points** | 10 on the mainline |
 
-Two liveries alternate around the loop: the **Axsellya Express** (blue) and the
-**Brown Streak** (brown). There is no freight service — every train stops and
-opens doors, where a freight consist stopped but never opened, which reads as
-broken to a player who does not know why.
+All six trains are set in `configs/metro.lua`. The **Axsellya Express** (blue)
+and **Brown Streak** (brown) sets are still in `dps-trains-stock`, but no train
+runs them now. There is no freight service. Every train stops and opens its
+doors. A freight consist stopped but never opened, which reads as broken to a
+player who does not know why.
 
 ### Calling points
 
+Node numbers are from `data/tracks-0.lua`.
+
 ```
- 462  Lumber Mill                 2434  Davis Interchange (Southbound)
- 651  Paleto Bay                  2667  Port Depot
-1481  Quarry (Southbound)         2865  Davis Interchange (Northbound)
-1701  Power Plant                 3891  Quarry (Northbound)
-                                  4159  Sandy Shores
+ 462  Lumber Mill                 2667  Port Depot
+ 659  Paleto Bay                  2792  Market Square (northbound only)
+1464  Quarry                      2925  Downtown LS (Northbound)
+1701  Power Plant                 3891  Quarry (return pass)
+2357  Downtown LS (Southbound)    4159  Sandy Shores
 ```
 
-Davis and Quarry each appear twice because the line calls at them **in both
-directions** — they are the same station, not duplicates. Davis Interchange is
-about 400 m from the metro's Davis platform and is the connection between the
-two networks.
+Quarry and Downtown LS each appear twice because the line calls at them **in
+both directions**. They are the same station, not duplicates. Downtown LS and
+Market Square were added on 29 September 2026. The two older Downtown passes
+(nodes 2434 and 2865, named Davis Interchange on the arrival board) were
+removed the same day and are skipped the same way as Wind Farm.
 
 **Wind Farm (node 1555) is skipped**, via `config.general.skipStations`. It sat
 520 m from Quarry, so with braking starting 500 m out a train decelerated across
@@ -190,6 +256,11 @@ so the custom consists start at **28**: `28` Axsellya, `29` Brown Streak,
 `30` freight (unused), `31` metro. **It is registered by `dps-trains-stock`, not
 here** — registering it from this resource crashes clients on join with an
 access violation inside the game's parser.
+
+Those numbers are for a game build where the vanilla metro is 27 (builds 3095
+to 3406). From build 3407 the game has one more vanilla set, so every number
+moves up one. `configs/metro.lua` computes the numbers from the build, so the
+trains follow a build change without an edit.
 
 **An invalid variation index crashes clients** that are not on canary. There is
 no graceful failure.
@@ -264,10 +335,12 @@ luac5.4 -p /tmp/x.lua
 | `trainspace <track> <count>` | evenly spaced node coordinates for start locations |
 | `setr ox:printlevel:dps-trains debug` | verbose lifecycle logging |
 
-`handle=nil` means ghost, a number means materialised. Positions are given as
-**node indices** in `configs/freight.lua`, not coordinates — `CTrain` derives
-`currentCoords` from the node, so spacing is exact rather than eyeballed off a
-map.
+`handle=nil` means ghost, a number means materialised. `traindebug` gives
+positions as **node indices**. `CTrain` derives `currentCoords` from the node,
+so spacing is exact rather than eyeballed off a map.
+
+`/trackprobe` (in game) prints which train tracks the game engine has loaded to
+the server console. Use it after adding track data.
 
 ## Related resources
 
@@ -276,3 +349,59 @@ map.
 | `dps-trains-stock` | rolling stock, consists, station builds, `TRAINCONFIGS_FILE` |
 | `dps-traintools` | boarding, seating, ambient riders, `/traindoors` |
 | `dps-transitapp` | Los Santos Transit — live arrivals on the lb-phone |
+| `dps-traintracks` | extra track data, no scripts |
+
+## Recent changes
+
+- **12 November 2026.** README: what it is for, how it works alone and with paid scripts, other DPS scripts.
+- **1 November 2026.** The yellow metro runs the light rail and the tram set
+  runs the country mainline. Station announcements follow the line you are on,
+  so swapping trains between lines changes nothing. Roxwood Junction is no
+  longer a mainline stop.
+- **31 October 2026.** One shared station list (`shared/stations.lua`) for the
+  client and the server. Station announcements are spoken through dps-voice.
+  Consist numbers are worked out from the game build (build 3570).
+- **29 October 2026.** The Roxwood line is off: track 12 is out of
+  `config.usedTracks` and the Roxwood shuttle no longer spawns. Tram consist
+  added.
+- **4 October 2026.** Trains reverse at a terminus. Only tracks the game has
+  are enabled. `/trackprobe` added.
+- **29 September 2026.** Downtown LS and Market Square stops added. The old
+  Downtown stop removed. Regional line speed set to 23.1 m/s.
+- **22 September 2026.** Metro seat map rebuilt: 18 seats along both walls.
+  Gentler departure from stations.
+
+## Author
+
+Made by [DaemonAlex](https://github.com/DaemonAlex) for DelPerroSands.
+
+The engine is forked from [Ehbw-Trains](https://github.com/Ehbw) by Ehbw. The
+rolling stock in `dps-trains-stock` comes from Trains Overhauled by Big Daddy.
+
+## Other DPS scripts
+
+All of these are made for DelPerroSands and run together on one Qbox server. Each one works on
+its own. The ones marked "pairs with" do more when both are running.
+
+| Script | What it does |
+|---|---|
+| [dps-inventory](https://github.com/DaemonAlex/dps-inventory) | The inventory: ox_inventory with equipment slots, backpacks, armour plates and a self status panel, in the DelPerroSands colours. |
+| [dps-medical](https://github.com/DaemonAlex/dps-medical) | Patient records, illness and diagnostic tests. A companion to wasabi_ambulance. Pairs with dps-inventory: symptoms and diagnoses show on the status panel. |
+| [dps-insurance](https://github.com/DaemonAlex/dps-insurance) | Ties m-Insurance into the MDT, impound, hospital and medical chart. Pairs with dps-medical. |
+| [dps-studio](https://github.com/DaemonAlex/dps-studio) | Build rooms, doors and portals in game from one panel (`/studio`), with owners and managers so staff do not have to support them. |
+| [dps-shops](https://github.com/DaemonAlex/dps-shops) | Shop clerks who greet and react to a robbery, then player-owned shops. |
+| [dps-fleet](https://github.com/DaemonAlex/dps-fleet) | Vehicle browser and workshop on one panel: extras, liveries and mods for emergency vehicles. |
+| [dps-parking](https://github.com/DaemonAlex/dps-parking) | Parking with valet, impound, violations and reserved spots. |
+| [dps-vehiclepersistence](https://github.com/DaemonAlex/dps-vehiclepersistence) | Vehicles stay where they were parked. Pairs with dps-parking. |
+| [dps-towjob](https://github.com/DaemonAlex/dps-towjob) | Queue-based tow job with jg-mechanic integration. |
+| [dps-services](https://github.com/DaemonAlex/dps-services) | Request a tow and follow it live on the lb-phone and lb-tablet. Pairs with dps-towjob. |
+| [dps-autoshops](https://github.com/DaemonAlex/dps-autoshops) | Self-service repair shops when no mechanic is on duty. |
+| [dps-cityworker](https://github.com/DaemonAlex/dps-cityworker) | City infrastructure job and career. |
+| [dps-ainpcs](https://github.com/DaemonAlex/dps-ainpcs) | NPCs you can talk to, with trust, quests and intel. |
+| [dps-badpeds](https://github.com/DaemonAlex/dps-badpeds) | Police interaction with NPCs: stops, arrests, intel and jail records. |
+| [dps-gangwars](https://github.com/DaemonAlex/dps-gangwars) | Ambient gang NPCs, territory population and war reinforcements. |
+| [dps-rotations](https://github.com/DaemonAlex/dps-rotations) | Moves dealers, harvests and other spots on a fixed schedule. |
+| [dps-transitapp](https://github.com/DaemonAlex/dps-transitapp) | Live train arrival boards on the lb-phone. |
+| [dps-faceplant](https://github.com/DaemonAlex/dps-faceplant) | City help, reports and staff tools on the lb-phone and lb-tablet. |
+| [dps-chat](https://github.com/DaemonAlex/dps-chat) | A command box for voice-only servers. No chat feed. |
+| [dps-filmmode](https://github.com/DaemonAlex/dps-filmmode) | One key hides every HUD layer and gives a smooth free camera for recording. |
