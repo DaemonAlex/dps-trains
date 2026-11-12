@@ -66,6 +66,7 @@ end
 --- (31 Oct: hardcoded numbers did exactly that after a build change.)
 local VANILLA_METRO = metroVariation       -- the yellow Los Santos metro
 local LRT_TRAM      = metroVariation + 5   -- lrt_config01, the Flexity tram
+local METRO_RAGS    = metroVariation + 4   -- metro_config01, now the Rags facametrotrain (DPS 2026-11-02)
 
 config.startLocations = {
     -- Both stock spawns sat ~20m apart at Davis, which starts the line bunched.
@@ -78,9 +79,9 @@ config.startLocations = {
     -- speed is set per train here because config.general.defaultSpeed is 20.1
     -- (45 mph) for the surface lines; the subway runs at the 30 m/s ceiling.
     -- LIGHT RAIL (track 3) runs the yellow Los Santos metro, the one Damon saw on the main track (31 Oct).
-    {variation = VANILLA_METRO, coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
-    {variation = VANILLA_METRO, coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
-    {variation = VANILLA_METRO, coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
+    {variation = METRO_RAGS, coords = vec3(193.196, -603.836, 16.756), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
+    {variation = METRO_RAGS, coords = vec3(-174.688, -1217.670, 36.550), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
+    {variation = METRO_RAGS, coords = vec3(-2.146, -1630.470, 28.304), direction = true, speed = 20.1},  -- LIGHT RAIL (track 3): the yellow metro, as Damon saw it running.
     -- COUNTRY MAINLINE (track 0). Was the Roxwood regional, which is gone; it runs the Flexity tram now (Damon 31 Oct).
     {index = 0, variation = LRT_TRAM, coords = vec3(1084.480, 3231.450, 39.256), direction = true, speed = 23.1},  -- COUNTRY MAINLINE (track 0): the Flexity tram, the repainted one.
     {index = 0, variation = LRT_TRAM, coords = vec3(2811.730, 3256.310, 49.762), direction = true, speed = 23.1},  -- COUNTRY MAINLINE (track 0): the Flexity tram, the repainted one.

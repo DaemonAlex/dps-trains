@@ -353,6 +353,9 @@ the server console. Use it after adding track data.
 
 ## Recent changes
 
+- **12 November 2026. Station names put right.** Every metro stop now carries the game's own station name, the same name the HUD shows. Five stops were named for the wrong place (for example, Puerto Del Sol was announced as Little Seoul), 11 of the 21 stops had no name, and Davis was missing. Both platforms of a station now share its name. On the country line, Paleto Bay was keyed to the wrong stop node and so had no name. The list was checked stop by stop against the nearest game station.
+- **10 November 2026.** Train list updated for the stock now running.
+- **2 November 2026.** The light rail runs the Rags metro set. The country line calls at five passenger stops only: Sandy Shores, Lumber Mill, Paleto Bay, Downtown Los Santos and Market Square.
 - **12 November 2026.** README: what it is for, how it works alone and with paid scripts, other DPS scripts.
 - **1 November 2026.** The yellow metro runs the light rail and the tram set
   runs the country mainline. Station announcements follow the line you are on,

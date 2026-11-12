@@ -23,6 +23,7 @@ config.trainModels = {
     `streakcoasterc`,
     `streakcoastercab`,
     `metrotrain`,
+    `facametrotrain`,   -- DPS 2026-11-02: the Rags metro, now the metro_config01 carriage
 }
 
 if not isServer then
