@@ -1060,7 +1060,7 @@ local STATION_NAMES = {
         -- Roughly 250m apart at Downtown and 50m at Quarry - the same station,
         -- opposite platforms. Naming them by direction tells a passenger which
         -- way the train is going; east/west would be meaningless here.
-        [462] = 'Lumber Mill', [651] = 'Paleto Bay',
+        [462] = 'Lumber Mill', [659] = 'Paleto Bay',   -- DPS 2026-11-12: was 651; the stop is node 659 (data/tracks-0.lua)
         [1481] = 'Quarry (Southbound)',
         [1555] = 'Wind Farm',                 -- skipped, see config.skipStations
         [1701] = 'Power Plant',
@@ -1072,15 +1072,23 @@ local STATION_NAMES = {
         [3891] = 'Quarry (Northbound)',
         [4159] = 'Sandy Shores',
     },
+    -- DPS 2026-11-12: every stop on the metro, both directions, named for the game's own station
+    -- (the names the HUD shows). Before this, 11 of the 21 stops had no name and five had the
+    -- wrong one. Nodes are the stop nodes in data/tracks-3.lua.
     [3] = {
-        [179] = 'Strawberry', [271] = 'Little Seoul', [388] = 'Puerto Del Sol',
-        [434] = 'LSIA West', [530] = 'LSIA East', [578] = 'Rockford South',
-        [689] = 'Little Seoul East', [782] = 'Davis', [1078] = 'Burton',
-        [1162] = 'Portola Drive',
+        [179] = 'Strawberry', [782] = 'Strawberry',
+        [271] = 'Puerto Del Sol', [689] = 'Puerto Del Sol',
+        [388] = 'LSIA Parking', [578] = 'LSIA Parking',
+        [434] = 'LSIA Terminal 4', [530] = 'LSIA Terminal 4',
+        [562] = 'Industrial',
+        [1078] = 'Burton', [2153] = 'Burton',
+        [1162] = 'Portola Drive', [2066] = 'Portola Drive',
+        [1233] = 'Del Perro', [1977] = 'Del Perro',
+        [1331] = 'Little Seoul', [1869] = 'Little Seoul',
+        [1397] = 'Pillbox South', [1791] = 'Pillbox South',
+        [1522] = 'Davis', [1649] = 'Davis',
     },
-    [12] = {  -- Roxwood shuttle. Stops added 2026-09-21 from Damon's F3 marks.
-        [94] = 'LB Bay',
-    },
+    -- (the Roxwood shuttle on track 12 was removed with the Roxwood map, 2026-10-31)
 }
 local TRAIN_LABELS = {
     metro = { label = 'Metro', color = '#4aa3ff' },
