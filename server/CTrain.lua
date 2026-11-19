@@ -454,25 +454,29 @@ local function GetEntityFromNetworkId(netId)
     return entity
 end
 
+-- DPS 2026-11-19: net ids from a client. Only a train this same client's game owns is deleted.
+local function isTrainOf(entity, source)
+    return entity and entity ~= 0 and DoesEntityExist(entity) and GetEntityType(entity) == 2
+        and GetVehicleType(entity) == 'train' and NetworkGetEntityOwner(entity) == source
+end
+
 ---@param train number
 ---@param carriages number[]
-local function RemoveTrains(train, carriages)
+---@param source number
+local function RemoveTrains(train, carriages, source)
+    if type(train) ~= 'number' then return end
     local id = GetEntityFromNetworkId(train)
-
-    if DoesEntityExist(id) then
-        if DeleteTrain then
-            DeleteTrain(id)
-        else
-            DeleteEntity(id)
-            if carriages then
-                for i=1, #carriages do
-                    local carriage = GetEntityFromNetworkId(carriages[i])
-                    if DoesEntityExist(carriage) then
-                        DeleteEntity(carriage)
-                    end
-                end
+    if not isTrainOf(id, source) then return end
+    if DeleteTrain then
+        DeleteTrain(id)
+    else
+        DeleteEntity(id)
+        if type(carriages) == 'table' then
+            for i = 1, math.min(#carriages, 12) do
+                local carriage = type(carriages[i]) == 'number' and GetEntityFromNetworkId(carriages[i])
+                if isTrainOf(carriage, source) then DeleteEntity(carriage) end
             end
-        end 
+        end
     end
 end
 
@@ -483,7 +487,7 @@ end
 function Train:RegisterEntity(source, trainNetId, carriagesNetIds, npc, reportedCount)
     if not self.private.isCreating then
         lib.print.warn(("Client %i attempted to register train for id %i, however the train isn't expecting any to be created"):format(source, self.id))
-        RemoveTrains(trainNetId, carriagesNetIds)
+        RemoveTrains(trainNetId, carriagesNetIds, source)
         return
     end
 
@@ -497,13 +501,13 @@ function Train:RegisterEntity(source, trainNetId, carriagesNetIds, npc, reported
     if not config.general.useServerSetter then
         if tonumber(selectedCandidate) ~= source then
             lib.print.warn(("Client %i attempted to register train for id %i, however this client wasn't the elected candidate"):format(source, self.id))
-            RemoveTrains(trainNetId, carriagesNetIds)
+            RemoveTrains(trainNetId, carriagesNetIds, source)
             return
         end
 
         if self.handle and DoesEntityExist(self.handle) then
             lib.print.warn(("Client %i attempted to register train, however a train already exists for id %i"):format(source, self.id))
-            RemoveTrains(trainNetId, carriagesNetIds)
+            RemoveTrains(trainNetId, carriagesNetIds, source)
             return
         end
     end
@@ -539,9 +543,10 @@ function Train:RegisterEntity(source, trainNetId, carriagesNetIds, npc, reported
     end
     self.carriages = carriages
 
-    if carriageCount < reportedCount then
+    reportedCount = tonumber(reportedCount)
+    if reportedCount and carriageCount < reportedCount then
         lib.print.warn(("Reported train count for train %i does not match actual train count, one or more carriages failed to network from the client."):format(self.id))
-        RemoveTrains(trainNetId, carriagesNetIds)
+        RemoveTrains(trainNetId, carriagesNetIds, source)
         self.handle = nil
         return
     end

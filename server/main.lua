@@ -149,27 +149,23 @@ local function GetEntityFromNetworkId(netId)
 
     return entity
 end
-local function RemoveTrains(data)
+-- DPS 2026-11-19: the net ids here come from a client. Only a train that this same client's game owns is ever
+-- deleted; before, any net id (a car, a ped, another player's prop) sent in a registerTrain event was removed.
+local function isTrainOf(entity, source)
+    return entity and entity ~= 0 and DoesEntityExist(entity) and GetEntityType(entity) == 2
+        and GetVehicleType(entity) == 'train' and NetworkGetEntityOwner(entity) == source
+end
+
+local function RemoveTrains(data, source)
+    if type(data) ~= 'table' or type(data.train) ~= 'number' then return end
     local train = GetEntityFromNetworkId(data.train)
-
-    if DoesEntityExist(train) then
-        if DeleteTrain then
-            DeleteEntity(train)
-            --DeleteTrain(train)
-        else
-            DeleteEntity(train)
-            if data.carriages then
-                for i=1, #data.carriages do
-                    local carriageId = data.carriages[i]
-                    if carriageId then
-                        local carriage = GetEntityFromNetworkId(data.carriages[i])
-                        if DoesEntityExist(carriage) then
-                            DeleteEntity(carriage)
-                        end
-                    end
-                end
-            end
-
+    if not isTrainOf(train, source) then return end
+    DeleteEntity(train)
+    if not DeleteTrain and type(data.carriages) == 'table' then
+        for i = 1, math.min(#data.carriages, 12) do
+            local id = data.carriages[i]
+            local carriage = type(id) == 'number' and GetEntityFromNetworkId(id)
+            if isTrainOf(carriage, source) then DeleteEntity(carriage) end
         end
     end
 end
@@ -182,7 +178,7 @@ if GetConvar("sv_entityLockdown", "inactive") == "inactive" then
 
         if config.general.useServerSetter then
             lib.print.warn(("User %s (%i) attempted to register train, however server-setters are used instead"):format(GetPlayerName(source), source))
-            RemoveTrains(data)
+            RemoveTrains(data, source)
             return
         end
 
@@ -199,7 +195,7 @@ if GetConvar("sv_entityLockdown", "inactive") == "inactive" then
         -- Trains are expected to have a registering id
         if not data.id then
             lib.print.warn(("User %i sent registerTrain event to server with no id. Culling trains"):format(source))
-            return RemoveTrains(data)
+            return RemoveTrains(data, source)
         end
 
         local train
@@ -212,9 +208,10 @@ if GetConvar("sv_entityLockdown", "inactive") == "inactive" then
 
         if not train then
             lib.print.warn(("User %i sent registerTrain event to server with an id that doesn't exist. Culling trains"))
-            return RemoveTrains(data)
+            return RemoveTrains(data, source)
         end
 
+        if type(data.train) ~= 'number' or (data.carriages ~= nil and type(data.carriages) ~= 'table') then return end
         train:RegisterEntity(source, data.train, data.carriages or {}, data.npc, data.carriageCount)
     end)
 
